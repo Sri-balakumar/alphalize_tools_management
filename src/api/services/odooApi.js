@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as FileSystem from "expo-file-system";
 import { ODOO_URL } from "../config/odooConfig";
 
 // =============================================
@@ -44,6 +45,7 @@ const jsonRpc = async (url, service, method, args) => {
 // =============================================
 
 let sessionCookie = null;
+let webSessionId = null;
 
 const webJsonRpc = async (endpoint, params = {}) => {
   requestId += 1;
@@ -66,7 +68,7 @@ const webJsonRpc = async (endpoint, params = {}) => {
       withCredentials: true,
     });
 
-    // Capture session cookie from response
+    // Capture session cookie from response headers
     const setCookie = response.headers["set-cookie"];
     if (setCookie) {
       const match = Array.isArray(setCookie)
@@ -77,13 +79,20 @@ const webJsonRpc = async (endpoint, params = {}) => {
       }
     }
 
+    // Capture session_id from response body (more reliable in React Native)
+    const result = response.data.result;
+    if (result && result.session_id) {
+      webSessionId = result.session_id;
+      sessionCookie = `session_id=${result.session_id}`;
+    }
+
     if (response.data.error) {
       const err = response.data.error;
       const msg = err.data?.message || err.message || "Odoo Web Error";
       throw new Error(msg);
     }
 
-    return response.data.result;
+    return result;
   } catch (error) {
     if (error.message?.includes("Odoo")) throw error;
     if (error.response) {
@@ -208,6 +217,57 @@ export const odooFieldsGet = async (auth, model, fields = [], attributes = []) =
   return callOdoo(auth, model, "fields_get", [fields], { attributes });
 };
 
+// =============================================
+// Report PDF Download (uses web session)
+// =============================================
+
+const ensureWebSession = async (auth) => {
+  // Always re-authenticate to get a fresh session
+  const result = await webJsonRpc("/web/session/authenticate", {
+    db: auth.db,
+    login: auth.username,
+    password: auth.password,
+  });
+  // Try to get session_id from result body
+  if (result && result.session_id) {
+    webSessionId = result.session_id;
+    sessionCookie = `session_id=${result.session_id}`;
+  }
+  if (!webSessionId && !sessionCookie) {
+    throw new Error("Could not establish web session");
+  }
+};
+
+export const downloadReportPdf = async (auth, reportName, resId) => {
+  await ensureWebSession(auth);
+
+  const headers = {};
+  if (sessionCookie) {
+    headers["Cookie"] = sessionCookie;
+  }
+
+  // Try with session_id in URL param first
+  const url = `${ODOO_URL}/report/pdf/${reportName}/${resId}?session_id=${webSessionId}`;
+  const fileUri = FileSystem.cacheDirectory + `report_${resId}_${Date.now()}.pdf`;
+
+  const result = await FileSystem.downloadAsync(url, fileUri, { headers });
+
+  if (result.status === 200) {
+    return result.uri;
+  }
+
+  // If failed, try without session_id param (cookie only)
+  const url2 = `${ODOO_URL}/report/pdf/${reportName}/${resId}`;
+  const fileUri2 = FileSystem.cacheDirectory + `report_${resId}_${Date.now()}_v2.pdf`;
+  const result2 = await FileSystem.downloadAsync(url2, fileUri2, { headers });
+
+  if (result2.status === 200) {
+    return result2.uri;
+  }
+
+  throw new Error("Failed to download report (HTTP " + result.status + ")");
+};
+
 export default {
   authenticate: odooAuthenticate,
   getDatabases: odooGetDatabases,
@@ -220,4 +280,5 @@ export default {
   searchCount: odooSearchCount,
   callMethod: odooCallMethod,
   fieldsGet: odooFieldsGet,
+  downloadReportPdf,
 };

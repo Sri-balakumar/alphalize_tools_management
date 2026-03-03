@@ -4,6 +4,7 @@ import {
   odooWrite,
   odooRead,
   odooCallMethod,
+  downloadReportPdf,
 } from "./odooApi";
 
 // =============================================
@@ -36,7 +37,7 @@ export const fetchCategories = async (auth) => {
 const TOOL_FIELDS = [
   "name", "code", "serial_number", "barcode", "brand", "model_name",
   "location", "state", "category_id", "total_qty", "available_qty",
-  "rental_price_per_day", "late_fee_per_day", "default_deposit",
+  "rental_price_per_day", "late_fee_per_day",
   "purchase_price", "purchase_date", "description",
   "total_rental_count", "total_revenue", "active",
 ];
@@ -68,7 +69,6 @@ export const createTool = async (auth, values) => {
     state: values.state || "available",
     category_id: values.category_id ? Number(values.category_id) : false,
     total_qty: parseFloat(values.total_qty) || 1,
-    default_deposit: parseFloat(values.default_deposit) || 0,
     purchase_price: parseFloat(values.purchase_price) || 0,
     purchase_date: values.purchase_date || false,
     description: values.description || false,
@@ -89,7 +89,6 @@ export const updateTool = async (auth, id, values) => {
   if (values.state !== undefined) odooValues.state = values.state;
   if (values.category_id !== undefined) odooValues.category_id = values.category_id ? Number(values.category_id) : false;
   if (values.total_qty !== undefined) odooValues.total_qty = parseFloat(values.total_qty) || 1;
-  if (values.default_deposit !== undefined) odooValues.default_deposit = parseFloat(values.default_deposit) || 0;
   if (values.purchase_price !== undefined) odooValues.purchase_price = parseFloat(values.purchase_price) || 0;
   if (values.purchase_date !== undefined) odooValues.purchase_date = values.purchase_date || false;
   if (values.description !== undefined) odooValues.description = values.description || false;
@@ -115,7 +114,6 @@ const mapTool = (r) => ({
   available_qty: r.available_qty || 0,
   rental_price_per_day: String(r.rental_price_per_day || "0"),
   late_fee_per_day: String(r.late_fee_per_day || "0"),
-  default_deposit: String(r.default_deposit || "0"),
   purchase_price: String(r.purchase_price || "0"),
   purchase_date: r.purchase_date || "",
   description: r.description || "",
@@ -131,11 +129,19 @@ const ORDER_FIELDS = [
   "name", "state", "partner_id", "partner_phone", "partner_email",
   "date_order", "date_planned_checkout", "date_planned_checkin",
   "date_checkout", "date_checkin", "rental_period_type", "rental_duration",
-  "actual_duration", "actual_duration_display", "deposit_amount",
-  "deposit_returned", "subtotal", "late_fee", "damage_charges",
-  "discount_amount", "total_amount", "notes", "terms",
+  "actual_duration", "actual_duration_display", "advance_amount",
+  "advance_returned", "amount_due", "subtotal", "late_fee", "damage_charges",
+  "discount_amount", "discount_authorized_by", "total_amount",
+  "invoice_id", "invoice_state", "notes", "terms",
   "is_late", "user_id", "customer_code",
   "line_ids",
+];
+
+// Image / signature Binary fields (fetched separately to avoid slowing list views)
+const ORDER_IMAGE_FIELDS = [
+  "customer_signature", "id_proof_image",
+  "checkin_customer_signature", "checkin_signature",
+  "discount_auth_signature", "discount_auth_photo",
 ];
 
 const ORDER_LINE_FIELDS = [
@@ -145,6 +151,8 @@ const ORDER_LINE_FIELDS = [
   "checkout_condition", "checkin_condition", "damage_note", "damage_charge",
   "discount_type", "discount_value", "discount_line_amount", "notes",
 ];
+
+const ORDER_LINE_IMAGE_FIELDS = ["checkout_tool_image"];
 
 export const fetchOrders = async (auth, domain = []) => {
   const records = await odooSearchRead(auth, "rental.order", domain, ORDER_FIELDS, { order: "id desc", limit: 50 });
@@ -187,12 +195,13 @@ export const fetchOrders = async (auth, domain = []) => {
 };
 
 export const fetchOrderById = async (auth, id) => {
-  const records = await odooRead(auth, "rental.order", [Number(id)], ORDER_FIELDS);
+  // Fetch order fields + image fields together for single-order view
+  const records = await odooRead(auth, "rental.order", [Number(id)], [...ORDER_FIELDS, ...ORDER_IMAGE_FIELDS]);
   if (!records.length) return null;
   const r = records[0];
   let lines = [];
   if (r.line_ids && r.line_ids.length > 0) {
-    lines = await odooRead(auth, "rental.order.line", r.line_ids, ORDER_LINE_FIELDS);
+    lines = await odooRead(auth, "rental.order.line", r.line_ids, [...ORDER_LINE_FIELDS, ...ORDER_LINE_IMAGE_FIELDS]);
   }
   // Fetch timesheet
   let timesheet = [];
@@ -209,6 +218,23 @@ export const fetchOrderById = async (auth, id) => {
   return mapOrder(r, lines, timesheet);
 };
 
+// Fetch only image/signature fields for a single order (lightweight call for form screen)
+export const fetchOrderImages = async (auth, id) => {
+  const fields = [...ORDER_IMAGE_FIELDS, "discount_authorized_by"];
+  const records = await odooRead(auth, "rental.order", [Number(id)], fields);
+  if (!records.length) return null;
+  const r = records[0];
+  return {
+    customer_signature: r.customer_signature || false,
+    id_proof_image: r.id_proof_image || false,
+    checkin_customer_signature: r.checkin_customer_signature || false,
+    checkin_signature: r.checkin_signature || false,
+    discount_auth_signature: r.discount_auth_signature || false,
+    discount_auth_photo: r.discount_auth_photo || false,
+    discount_authorized_by: r.discount_authorized_by || "",
+  };
+};
+
 export const createOrder = async (auth, values, lineValues = []) => {
   const odooValues = {
     partner_id: values.partner_id ? Number(values.partner_id) : false,
@@ -216,7 +242,7 @@ export const createOrder = async (auth, values, lineValues = []) => {
     date_planned_checkin: values.date_planned_checkin || false,
     rental_period_type: values.rental_period_type || "day",
     rental_duration: parseFloat(values.rental_duration) || 1,
-    deposit_amount: parseFloat(values.deposit_amount) || 0,
+    advance_amount: parseFloat(values.advance_amount) || 0,
     notes: values.notes || false,
     terms: values.terms || false,
   };
@@ -243,6 +269,20 @@ export const updateOrderValues = async (auth, id, values) => {
   return true;
 };
 
+export const updateOrderLineValues = async (auth, lineId, values) => {
+  await odooWrite(auth, "rental.order.line", [Number(lineId)], values);
+  return true;
+};
+
+export const fetchOrderLineImages = async (auth, lineIds) => {
+  if (!lineIds || !lineIds.length) return [];
+  const records = await odooRead(auth, "rental.order.line", lineIds.map(Number), ORDER_LINE_IMAGE_FIELDS);
+  return records.map((r) => ({
+    id: r.id,
+    checkout_tool_image: r.checkout_tool_image || false,
+  }));
+};
+
 // Workflow actions (call Odoo model methods)
 export const confirmOrder = async (auth, id) => {
   return odooCallMethod(auth, "rental.order", "action_confirm", [Number(id)]);
@@ -258,6 +298,15 @@ export const markDone = async (auth, id) => {
 
 export const createInvoice = async (auth, id) => {
   return odooCallMethod(auth, "rental.order", "action_create_invoice", [Number(id)]);
+};
+
+// Invoice PDF reports
+export const downloadCheckoutInvoice = async (auth, orderId) => {
+  return downloadReportPdf(auth, "tools_rental_management.report_checkout_invoice", Number(orderId));
+};
+
+export const downloadCheckinInvoice = async (auth, orderId) => {
+  return downloadReportPdf(auth, "tools_rental_management.report_checkin_invoice", Number(orderId));
 };
 
 // Checkout wizard
@@ -289,9 +338,13 @@ const mapOrder = (r, lines = [], timesheet = []) => ({
   rental_period_type: r.rental_period_type || "day",
   rental_duration: String(r.rental_duration || 1),
   actual_duration: r.actual_duration_display || "",
-  deposit_amount: String(r.deposit_amount || 0),
-  deposit_returned: r.deposit_returned || false,
+  advance_amount: String(r.advance_amount || 0),
+  advance_returned: r.advance_returned || false,
+  amount_due: r.amount_due || 0,
+  invoice_id: r.invoice_id ? r.invoice_id[0] : null,
+  invoice_state: r.invoice_state || false,
   discount_amount: String(r.discount_amount || 0),
+  discount_authorized_by: r.discount_authorized_by || "",
   damage_charges: String(r.damage_charges || 0),
   total_amount: r.total_amount || 0,
   subtotal: r.subtotal || 0,
@@ -299,6 +352,13 @@ const mapOrder = (r, lines = [], timesheet = []) => ({
   notes: r.notes || "",
   terms: r.terms || "",
   is_late: r.is_late || false,
+  // Image / signature base64 strings (false if empty)
+  customer_signature: r.customer_signature || false,
+  id_proof_image: r.id_proof_image || false,
+  checkin_customer_signature: r.checkin_customer_signature || false,
+  checkin_signature: r.checkin_signature || false,
+  discount_auth_signature: r.discount_auth_signature || false,
+  discount_auth_photo: r.discount_auth_photo || false,
   lines: lines.map(mapOrderLine),
   timesheet: timesheet.map(mapTimesheet),
 });
@@ -329,7 +389,7 @@ const mapOrderLine = (l) => ({
   notes: l.notes || "",
   extra_days: "0",
   late_fee_per_day: "0",
-  checkout_tool_image: false,
+  checkout_tool_image: l.checkout_tool_image || false,
 });
 
 const mapTimesheet = (t) => ({
@@ -352,7 +412,7 @@ export const fetchCustomers = async (auth) => {
     auth,
     "res.partner",
     ["|", ["customer_rank", ">", 0], ["is_company", "=", false]],
-    ["name", "phone", "email", "customer_rank", "mobile", "street", "city"],
+    ["name", "phone", "email", "customer_rank", "street", "city"],
     { order: "name", limit: 200 }
   );
   return records.map((r) => ({
@@ -360,7 +420,7 @@ export const fetchCustomers = async (auth) => {
     odoo_id: r.id,
     name: r.name || "",
     customer_code: "",
-    phone: r.phone || r.mobile || "",
+    phone: r.phone || "",
     email: r.email || "",
     rental_count: 0,
     total_revenue: "0",
@@ -372,7 +432,7 @@ export const searchCustomers = async (auth, query) => {
     auth,
     "res.partner",
     ["|", "|", ["name", "ilike", query], ["phone", "ilike", query], ["email", "ilike", query]],
-    ["name", "phone", "email", "customer_rank", "mobile", "street", "city"],
+    ["name", "phone", "email", "customer_rank", "street", "city"],
     { order: "name", limit: 50 }
   );
   return records.map((r) => ({
@@ -380,7 +440,7 @@ export const searchCustomers = async (auth, query) => {
     odoo_id: r.id,
     name: r.name || "",
     customer_code: "",
-    phone: r.phone || r.mobile || "",
+    phone: r.phone || "",
     email: r.email || "",
     rental_count: 0,
     total_revenue: "0",
@@ -409,7 +469,7 @@ export const fetchPricingRules = async (auth) => {
     [["active", "=", true]],
     [
       "name", "tool_id", "category_id", "period_type", "price",
-      "late_fee_per_day", "deposit_amount", "min_duration", "max_duration",
+      "late_fee_per_day", "min_duration", "max_duration",
       "is_primary_pricing", "notes",
     ],
     { order: "sequence, name" }
@@ -418,12 +478,12 @@ export const fetchPricingRules = async (auth) => {
     id: String(r.id),
     odoo_id: r.id,
     name: r.name || "",
+    tool_id: r.tool_id ? r.tool_id[0] : null,
     tool_name: r.tool_id ? r.tool_id[1] : "",
     category_name: r.category_id ? r.category_id[1] : "",
     period_type: r.period_type || "day",
     price: r.price || 0,
     late_fee_per_day: r.late_fee_per_day || 0,
-    deposit_amount: r.deposit_amount || 0,
     min_duration: r.min_duration || 0,
     max_duration: r.max_duration || 0,
     is_primary_pricing: r.is_primary_pricing || false,
@@ -440,12 +500,17 @@ export default {
   updateTool,
   fetchOrders,
   fetchOrderById,
+  fetchOrderImages,
   createOrder,
   updateOrderValues,
+  updateOrderLineValues,
+  fetchOrderLineImages,
   confirmOrder,
   cancelOrder,
   markDone,
   createInvoice,
+  downloadCheckoutInvoice,
+  downloadCheckinInvoice,
   openCheckoutWizard,
   openCheckinWizard,
   fetchCustomers,

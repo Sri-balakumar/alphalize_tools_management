@@ -143,12 +143,12 @@ const RentalOrdersScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {item.deposit_amount > 0 && (
+        {parseFloat(item.advance_amount) > 0 && (
           <View style={styles.depositRow}>
             <Text style={styles.depositText}>
-              Deposit: ${parseFloat(item.deposit_amount).toFixed(2)}
+              Advance: ${parseFloat(item.advance_amount).toFixed(2)}
             </Text>
-            {item.deposit_returned && (
+            {item.advance_returned && (
               <Text style={styles.depositReturned}>Returned</Text>
             )}
           </View>

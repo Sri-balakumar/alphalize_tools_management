@@ -129,11 +129,6 @@ const ToolsScreen = ({ navigation, route }) => {
           ) : (
             <Text style={styles.noPriceText}>No pricing</Text>
           )}
-          {item.default_deposit ? (
-            <Text style={styles.depositText}>
-              Deposit: ${parseFloat(item.default_deposit).toFixed(2)}
-            </Text>
-          ) : null}
         </View>
       </View>
 

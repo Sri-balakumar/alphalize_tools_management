@@ -50,7 +50,6 @@ const ToolFormScreen = ({ navigation, route }) => {
     total_qty: existingTool?.total_qty?.toString() || "1",
     rental_price_per_day: existingTool?.rental_price_per_day?.toString() || "",
     late_fee_per_day: existingTool?.late_fee_per_day?.toString() || "",
-    default_deposit: existingTool?.default_deposit?.toString() || "",
     purchase_price: existingTool?.purchase_price?.toString() || "",
     purchase_date: existingTool?.purchase_date || "",
     description: existingTool?.description || "",
@@ -150,7 +149,6 @@ const ToolFormScreen = ({ navigation, route }) => {
           <TextInput label="Total Quantity" placeholder="1" value={form.total_qty} onChangeText={(t) => handleChange("total_qty", t)} keyboardType="numeric" column />
           <TextInput label="Rental Price / Day" placeholder="0.00" value={form.rental_price_per_day} onChangeText={(t) => handleChange("rental_price_per_day", t)} keyboardType="decimal-pad" column />
           <TextInput label="Late Fee / Day" placeholder="0.00" value={form.late_fee_per_day} onChangeText={(t) => handleChange("late_fee_per_day", t)} keyboardType="decimal-pad" column />
-          <TextInput label="Default Deposit" placeholder="0.00" value={form.default_deposit} onChangeText={(t) => handleChange("default_deposit", t)} keyboardType="decimal-pad" column />
 
           {/* Purchase Info */}
           <Text style={styles.section}>Purchase Info</Text>

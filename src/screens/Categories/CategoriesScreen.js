@@ -1,26 +1,41 @@
-import React, { useState } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
-
-const CATEGORIES = [
-  { id: "1", name: "Power Tools", code: "PWR", toolCount: 0 },
-  { id: "2", name: "Hand Tools", code: "HND", toolCount: 0 },
-  { id: "3", name: "Heavy Equipment", code: "HVY", toolCount: 0 },
-  { id: "4", name: "Measuring Instruments", code: "MSR", toolCount: 0 },
-  { id: "5", name: "Safety Equipment", code: "SFT", toolCount: 0 },
-  { id: "6", name: "Garden & Landscaping", code: "GRD", toolCount: 0 },
-  { id: "7", name: "Cleaning Equipment", code: "CLN", toolCount: 0 },
-];
+import useToolStore from "@stores/toolManagement/useToolStore";
+import useAuthStore from "@stores/auth/useAuthStore";
 
 const CategoriesScreen = ({ navigation }) => {
-  const [categories] = useState(CATEGORIES);
+  const odooAuth = useAuthStore((s) => s.odooAuth);
+  const categories = useToolStore((s) => s.categories);
+  const tools = useToolStore((s) => s.tools);
+  const loading = useToolStore((s) => s.loading);
+  const fetchCategories = useToolStore((s) => s.fetchCategories);
+  const fetchTools = useToolStore((s) => s.fetchTools);
+
+  // Refresh categories & tools each time this tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (odooAuth) {
+        fetchCategories(odooAuth);
+        fetchTools(odooAuth);
+      }
+    }, [odooAuth])
+  );
+
+  // Compute tool count dynamically from store tools
+  const categoriesWithCount = categories.map((cat) => ({
+    ...cat,
+    tool_count: tools.filter((t) => t.category_id === cat.id).length || cat.tool_count || 0,
+  }));
 
   const renderCategory = ({ item }) => (
     <TouchableOpacity
@@ -39,7 +54,7 @@ const CategoriesScreen = ({ navigation }) => {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{item.name}</Text>
-          <Text style={styles.cardSub}>{item.toolCount} tools</Text>
+          <Text style={styles.cardSub}>{item.tool_count} tools</Text>
         </View>
       </View>
       <Text style={styles.arrow}>{">"}</Text>
@@ -49,10 +64,21 @@ const CategoriesScreen = ({ navigation }) => {
   return (
     <SafeAreaView>
       <RoundedContainer>
+        {loading && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={COLORS.primaryThemeColor} />
+            <Text style={styles.loadingText}>Loading categories...</Text>
+          </View>
+        )}
+        {!loading && categoriesWithCount.length === 0 && (
+          <View style={styles.emptyRow}>
+            <Text style={styles.emptyText}>No categories found</Text>
+          </View>
+        )}
         <FlatList
-          data={categories}
+          data={categoriesWithCount}
           renderItem={renderCategory}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
         />
@@ -115,6 +141,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.gray,
     fontWeight: "bold",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.gray,
+  },
+  emptyRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: COLORS.gray,
   },
 });
 

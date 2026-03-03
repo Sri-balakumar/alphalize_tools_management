@@ -56,12 +56,6 @@ const PricingScreen = ({ navigation }) => {
               ${item.late_fee_per_day?.toFixed(2) || "0.00"}/day
             </Text>
           </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Deposit</Text>
-            <Text style={styles.detailValue}>
-              ${item.deposit_amount?.toFixed(2) || "0.00"}
-            </Text>
-          </View>
           {(item.min_duration > 0 || item.max_duration > 0) && (
             <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>Duration</Text>

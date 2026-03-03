@@ -16,6 +16,8 @@ import {
   markDone as apiMarkDone,
   createInvoice as apiCreateInvoice,
   createCustomer as apiCreateCustomer,
+  openCheckoutWizard as apiCheckoutOrder,
+  openCheckinWizard as apiCheckinOrder,
 } from "@api/services/odooService";
 
 const useToolStore = create(
@@ -147,6 +149,16 @@ const useToolStore = create(
 
       createInvoice: async (auth, id) => {
         await apiCreateInvoice(auth, id);
+        await get().fetchOrders(auth);
+      },
+
+      checkoutOrder: async (auth, id) => {
+        await apiCheckoutOrder(auth, id);
+        await get().fetchOrders(auth);
+      },
+
+      checkinOrder: async (auth, id) => {
+        await apiCheckinOrder(auth, id);
         await get().fetchOrders(auth);
       },
 
