@@ -27,7 +27,8 @@ import * as Sharing from "expo-sharing";
 import * as Print from "expo-print";
 import SignaturePad from "@components/common/SignaturePad/SignaturePad";
 import CameraCapture from "@components/common/CameraCapture/CameraCapture";
-import { updateOrderValues, updateOrderLineValues, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice } from "@api/services/odooService";
+import { updateOrderValues, updateOrderLineValues, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer } from "@api/services/odooService";
+import { isEmail, isPhone } from "@utils/validation/validation";
 
 const PERIOD_TYPES = [
   { label: "Daily", value: "day" },
@@ -147,6 +148,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
   const signatureRef = useRef(null);
+  const [signStrokeColor, setSignStrokeColor] = useState("#000");
+  const [signStrokeWidth, setSignStrokeWidth] = useState(3);
+  const [signModeEraser, setSignModeEraser] = useState(false);
+  const [checkoutSignatureTime, setCheckoutSignatureTime] = useState(existingOrder?.checkout_signature_time || null);
+  const [checkinSignatureTime, setCheckinSignatureTime] = useState(existingOrder?.checkin_signature_time || null);
+  const [discountAuthSignatureTime, setDiscountAuthSignatureTime] = useState(existingOrder?.discount_auth_signature_time || null);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraCallback, setCameraCallback] = useState(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -167,6 +174,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [invoicePaperSize, setInvoicePaperSize] = useState("a4");
   const [invoiceDownloading, setInvoiceDownloading] = useState(false);
   const [invoicePrinting, setInvoicePrinting] = useState(false);
+  const [phoneError, setPhoneError] = useState(null);
+  const [emailError, setEmailError] = useState(null);
+
+  // Debounce refs for auto-saving phone and email
+  const phoneDebounceRef = useRef(null);
+  const emailDebounceRef = useRef(null);
 
   const PERIOD_DURATION_MAP = { day: "1", week: "7", month: "30" };
 
@@ -178,6 +191,16 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       setErrors((prev) => ({ ...prev, rental_period_type: null }));
       return;
     }
+    
+    // Special handling for phone number - limit to 10 digits only
+    if (field === "partner_phone") {
+      const digitsOnly = value.replace(/\D/g, "");
+      // Only allow input if it has 10 or fewer digits
+      if (digitsOnly.length > 10) {
+        return; // Don't update if more than 10 digits
+      }
+    }
+    
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: null }));
   };
@@ -371,61 +394,63 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   const actionConfirm = async () => {
     if (!validateOrder()) return;
-    setSaving(true);
-    try {
-      if (odooOrderId && odooAuth) {
-        await storeConfirmOrder(odooAuth, odooOrderId);
-        showToastMessage("Order confirmed");
-        savedRef.current = true;
-        setState("confirmed");
-        return;
-      }
-      // No existing order in Odoo — create it first, then confirm
-      if (odooAuth) {
-        const partnerId = await ensurePartnerId();
-        if (!partnerId) {
-          showToastMessage("Customer is required. Please select or enter a customer.");
-          setSaving(false);
+
+    // Optimistic UI update: mark confirmed immediately so screen responds fast
+    savedRef.current = true;
+    setState("confirmed");
+    showToastMessage("Confirming order...");
+
+    // Run network work in background; do not block UI
+    (async () => {
+      try {
+        if (odooOrderId && odooAuth) {
+          await storeConfirmOrder(odooAuth, odooOrderId);
+          showToastMessage("Order confirmed");
           return;
         }
-        const orderValues = {
-          partner_id: partnerId,
-          date_planned_checkout: form.date_planned_checkout || false,
-          date_planned_checkin: form.date_planned_checkin || false,
-          rental_period_type: form.rental_period_type,
-          rental_duration: parseFloat(form.rental_duration) || 1,
-          advance_amount: parseFloat(form.advance_amount) || 0,
-          notes: form.notes || "",
-          terms: form.terms || "",
-        };
-        const lineValues = lines.map((l) => ({
-          tool_id: l.tool_id || null,
-          unit_price: parseFloat(l.unit_price) || 0,
-          quantity: parseFloat(l.quantity) || 1,
-          planned_duration: parseFloat(l.planned_duration) || 1,
-          period_type: l.period_type || form.rental_period_type,
-        }));
-        const newId = await addOrder(odooAuth, orderValues, lineValues);
-        setOdooOrderId(newId);
-        await storeConfirmOrder(odooAuth, newId);
-        showToastMessage("Order confirmed");
-        savedRef.current = true;
-        setState("confirmed");
-        return;
+
+        if (odooAuth) {
+          const partnerId = await ensurePartnerId();
+          if (!partnerId) {
+            showToastMessage("Customer is required. Please select or enter a customer.");
+            return;
+          }
+          const orderValues = {
+            partner_id: partnerId,
+            date_planned_checkout: form.date_planned_checkout || false,
+            date_planned_checkin: form.date_planned_checkin || false,
+            rental_period_type: form.rental_period_type,
+            rental_duration: parseFloat(form.rental_duration) || 1,
+            advance_amount: parseFloat(form.advance_amount) || 0,
+            notes: form.notes || "",
+            terms: form.terms || "",
+          };
+          const lineValues = lines.map((l) => ({
+            tool_id: l.tool_id || null,
+            unit_price: parseFloat(l.unit_price) || 0,
+            quantity: parseFloat(l.quantity) || 1,
+            planned_duration: parseFloat(l.planned_duration) || 1,
+            period_type: l.period_type || form.rental_period_type,
+          }));
+          const newId = await addOrder(odooAuth, orderValues, lineValues);
+          setOdooOrderId(newId);
+          await storeConfirmOrder(odooAuth, newId);
+          showToastMessage("Order confirmed");
+          return;
+        }
+
+        // Offline fallback
+        const orderName = "RNT/" + new Date().getFullYear().toString().slice(2) + "/" + String(Math.floor(Math.random() * 99999)).padStart(5, "0");
+        const custId = "CUS/" + String(Math.floor(Math.random() * 9999)).padStart(4, "0");
+        setForm((prev) => ({ ...prev, name: orderName, customer_id: custId }));
+        addTimesheetEntry("note", "Rental Order created");
+        addTimesheetEntry("note", "Draft \u2192 Confirmed (Status)");
+        showToastMessage("Order confirmed (offline)");
+      } catch (e) {
+        showToastMessage("Confirm failed: " + e.message);
+        console.warn("actionConfirm background error:", e.message);
       }
-      // Offline fallback
-      const orderName = "RNT/" + new Date().getFullYear().toString().slice(2) + "/" + String(Math.floor(Math.random() * 99999)).padStart(5, "0");
-      const custId = "CUS/" + String(Math.floor(Math.random() * 9999)).padStart(4, "0");
-      setState("confirmed");
-      setForm((prev) => ({ ...prev, name: orderName, customer_id: custId }));
-      addTimesheetEntry("note", "Rental Order created");
-      addTimesheetEntry("note", "Draft \u2192 Confirmed (Status)");
-      showToastMessage("Order confirmed");
-    } catch (e) {
-      showToastMessage("Confirm failed: " + e.message);
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   const openCheckoutWizard = () => {
@@ -442,44 +467,45 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Required", "ID Proof is mandatory for check-out");
       return;
     }
-    setSaving(true);
-    try {
-      if (odooOrderId && odooAuth) {
-        // Save images/signatures to Odoo FIRST (before state transition)
-        const imageVals = {};
-        const sigB64 = await uriToBase64(checkoutSignatureUri);
-        if (sigB64) imageVals.customer_signature = sigB64;
-        const idB64 = await uriToBase64(idProofUri);
-        if (idB64) imageVals.id_proof_image = idB64;
-        if (Object.keys(imageVals).length > 0) {
-          await updateOrderValues(odooAuth, odooOrderId, imageVals);
-        }
-        // Save tool photos per-line (only if line has a real Odoo ID)
-        for (let i = 0; i < lines.length; i++) {
-          const photoUri = toolPhotoUris[i];
-          const lineOdooId = lines[i].odoo_id;
-          if (photoUri && lineOdooId) {
-            const photoB64 = await uriToBase64(photoUri);
-            if (photoB64) {
-              await updateOrderLineValues(odooAuth, lineOdooId, { checkout_tool_image: photoB64 });
+    // Optimistic: close modal and update UI immediately
+    setShowCheckoutModal(false);
+    savedRef.current = true;
+    setState("checked_out");
+    setForm((prev) => ({ ...prev, date_checkout: today(), actual_duration: form.rental_duration + " Day" }));
+    addTimesheetEntry("checkout", "None \u2192 " + today() + " (Actual Check-Out)");
+    addTimesheetEntry("note", "Confirmed \u2192 Checked Out (Status)");
+    showToastMessage("Checking out... ");
+
+    // Do the network work in background
+    (async () => {
+      try {
+        if (odooOrderId && odooAuth) {
+          const imageVals = {};
+          const sigB64 = await uriToBase64(checkoutSignatureUri);
+          if (sigB64) imageVals.customer_signature = sigB64;
+          const idB64 = await uriToBase64(idProofUri);
+          if (idB64) imageVals.id_proof_image = idB64;
+          if (Object.keys(imageVals).length > 0) {
+            await updateOrderValues(odooAuth, odooOrderId, imageVals);
+          }
+          for (let i = 0; i < lines.length; i++) {
+            const photoUri = toolPhotoUris[i];
+            const lineOdooId = lines[i].odoo_id;
+            if (photoUri && lineOdooId) {
+              const photoB64 = await uriToBase64(photoUri);
+              if (photoB64) {
+                await updateOrderLineValues(odooAuth, lineOdooId, { checkout_tool_image: photoB64 });
+              }
             }
           }
+          await storeCheckoutOrder(odooAuth, odooOrderId);
         }
-        // Then call the checkout action
-        await storeCheckoutOrder(odooAuth, odooOrderId);
+        showToastMessage("Check-out completed");
+      } catch (e) {
+        showToastMessage("Checkout failed: " + e.message);
+        console.warn("confirmCheckout background error:", e.message);
       }
-      setShowCheckoutModal(false);
-      setState("checked_out");
-      savedRef.current = true;
-      setForm((prev) => ({ ...prev, date_checkout: today(), actual_duration: form.rental_duration + " Day" }));
-      addTimesheetEntry("checkout", "None \u2192 " + today() + " (Actual Check-Out)");
-      addTimesheetEntry("note", "Confirmed \u2192 Checked Out (Status)");
-      showToastMessage("Check-out completed");
-    } catch (e) {
-      showToastMessage("Checkout failed: " + e.message);
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   const openCheckinWizard = () => {
@@ -503,17 +529,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       const toolId = line.tool_id;
       const tool = tools.find((t) => {
         const tId = t.odoo_id || parseInt(t.id);
-        return tId === toolId || String(tId) === String(toolId);
+        return tId && Number(tId) === Number(toolId);
       });
-      // Get late fee per day: pricing rule > tool > line
       let fee = parseFloat(line.late_fee_per_day) || 0;
-      if (fee === 0) {
-        fee = tool ? parseFloat(tool.late_fee_per_day) || 0 : 0;
-      }
-      if (fee === 0 && pricingRules && pricingRules.length > 0) {
-        const toolName = line.tool_name || (tool ? tool.name : "");
+      if (tool) {
         const rule = pricingRules.find(
-          (pr) => pr.tool_name === toolName || (toolId && pr.tool_id === toolId)
+          (r) => Number(r.tool_id) === Number(toolId) && r.period_type === form.rental_period_type
         );
         if (rule) fee = parseFloat(rule.late_fee_per_day) || 0;
       }
@@ -592,7 +613,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     setShowInvoiceModal(true);
   };
 
-  const buildInvoiceHtml = (type) => {
+  const buildInvoiceHtml = (type, assets = {}) => {
     const isCheckin = type === "checkin";
     const subtotal = calcSubtotal();
     const lateFees = calcLateFees();
@@ -605,6 +626,16 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     // --- Checkout tool rows ---
     const checkoutToolRows = lines.map((l, i) => {
       const rentalCost = calcLineTotal(l);
+      // include discount info if any
+      let discountInfo = "";
+      if (l.discount_type && (l.discount_value || l.discount_value === "0")) {
+        const val = parseFloat(l.discount_value) || 0;
+        if (l.discount_type === "percentage") {
+          discountInfo = `${val}%`;
+        } else {
+          discountInfo = `${cur}${val.toFixed(2)}`;
+        }
+      }
       return `<tr>
         <td>${i + 1}</td>
         <td>${l.tool_name || "-"}</td>
@@ -613,6 +644,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td class="text-end">${cur}${(parseFloat(l.unit_price) || 0).toFixed(2)}</td>
         <td class="text-end">${parseInt(l.planned_duration) || 1}</td>
         <td class="text-end">${cur}${rentalCost.toFixed(2)}</td>
+        <td class="text-end">${discountInfo}</td>
       </tr>`;
     }).join("");
 
@@ -626,6 +658,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       let discAmt = 0;
       if (discType === "percentage") discAmt = (calcLineTotal(l) + lateFee + dmg) * discVal / 100;
       else if (discType === "fixed") discAmt = discVal;
+      // render discount info: if percentage show value%, otherwise show amount
+      const discDisplay = discType === "percentage"
+        ? `${discVal}% (${cur}${discAmt.toFixed(2)})`
+        : `${cur}${discAmt.toFixed(2)}`;
       return `<tr>
         <td>${i + 1}</td>
         <td>${l.tool_name || "-"}</td>
@@ -638,12 +674,14 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td class="text-end" ${lateFee > 0 ? 'style="color:red;font-weight:bold"' : ""}>${cur}${lateFee.toFixed(2)}</td>
         <td>${l.damage_note || ""}</td>
         <td class="text-end" ${dmg > 0 ? 'style="color:red;font-weight:bold"' : ""}>${cur}${dmg.toFixed(2)}</td>
-        <td class="text-end" ${discAmt > 0 ? 'style="color:green;font-weight:bold"' : ""}>${cur}${discAmt.toFixed(2)}</td>
+        <td class="text-end" ${discAmt > 0 ? 'style="color:green;font-weight:bold"' : ""}>${discDisplay}</td>
       </tr>`;
     }).join("");
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
     <style>
+      /* Respect user-selected paper size (A4 or A5). Some printers or print dialogs may still override this. */
+      @page { size: ${invoicePaperSize === "a5" ? "A5" : "A4"} portrait; margin: 12mm; }
       body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #333; font-size: 12px; }
       h2.title { text-align: center; color: #2c3e50; margin: 0 0 4px 0; }
       h4.sub { text-align: center; color: #888; margin: 0 0 16px 0; }
@@ -689,7 +727,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </div>
     </div>
 
-    ${form.customer_id ? `<div class="badge"><span>Customer ID: ${form.customer_id}</span></div>` : ""}
+    ${ (form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
 
     <!-- Rental Details -->
     <table class="details">
@@ -736,7 +774,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     ${!isCheckin ? `<table class="tools">
       <thead><tr>
         <th>#</th><th>Tool</th><th>Serial No.</th><th>Condition</th>
-        <th class="text-end">Price/Day</th><th class="text-end">Duration (Days)</th><th class="text-end">Total</th>
+        <th class="text-end">Price/Day</th><th class="text-end">Duration (Days)</th><th class="text-end">Total</th><th class="text-end">Discount</th>
       </tr></thead>
       <tbody>${checkoutToolRows}</tbody>
     </table>` : `<table class="tools">
@@ -770,13 +808,38 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
     <!-- Signatures -->
     <div class="sig-row">
-      ${!isCheckin ? `<div class="sig-col"></div><div class="sig-col">
-        <hr/><strong>Customer Signature</strong><br/>${form.partner_name || ""}
-      </div>` : `<div class="sig-col">
-        <hr/><strong>Customer Signature</strong><br/>${form.partner_name || ""}
-      </div><div class="sig-col"></div><div class="sig-col">
-        <hr/><strong>Authority Signature</strong><br/>${form.responsible || "Admin"}
-      </div>`}
+      <div class="sig-col">
+        ${(() => {
+          const sigImg = isCheckin ? (assets.checkinSignature || assets.checkoutSignature) : (assets.checkoutSignature || assets.checkinSignature);
+          const sigName = form.partner_name || "";
+          const sigTime = isCheckin
+            ? (form.checkin_signature_time || form.date_checkin || form.date_checkout || new Date().toLocaleString())
+            : (form.checkout_signature_time || form.date_checkout || form.date_order || new Date().toLocaleString());
+          if (sigImg) {
+            return `<img src="${sigImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Customer</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
+          }
+          return `<hr/><div><strong>Customer Signature</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
+        })()}
+      </div>
+      <div class="sig-col">
+        ${(() => {
+          const authImg = isCheckin ? (assets.checkinAuthoritySignature || assets.discountAuthSignature) : (assets.discountAuthSignature || assets.checkinAuthoritySignature);
+          const authName = isCheckin ? (form.responsible || "Admin") : (discountAuthName || form.responsible || "Admin");
+          const authTime = isCheckin
+            ? (form.checkin_signature_time || form.date_checkin || new Date().toLocaleString())
+            : (form.discount_auth_signature_time || form.date_order || new Date().toLocaleString());
+          if (authImg) {
+            return `<img src="${authImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Authority</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
+          }
+          return `<hr/><div><strong>Authority Signature</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
+        })()}
+      </div>
+      ${assets.discountAuthSignature ? `<div class="sig-col">
+        <img src="${assets.discountAuthSignature}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/>
+        <div><strong>Discount Authorizer</strong></div>
+        <div>${discountAuthName || ""}</div>
+        <div style="font-size:11px;color:#666">${new Date().toLocaleString()}</div>
+      </div>` : ""}
     </div>
 
     <div class="footer">Generated from Tool Management App &mdash; ${new Date().toLocaleString()}</div>
@@ -798,7 +861,36 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   // Fallback: generate PDF locally from HTML
   const generateLocalPdf = async () => {
-    const html = buildInvoiceHtml(invoiceType);
+    // Resolve any signature file URIs to data URIs so images embed correctly in HTML
+    const resolveImageDataUri = async (val) => {
+      if (!val) return null;
+      // already data uri
+      if (typeof val === "string" && val.startsWith("data:")) return val;
+      // if it's raw base64 (no data:), convert
+      if (typeof val === "string" && /^[A-Za-z0-9+/=\r\n]+$/.test(val) && val.length > 100) {
+        return base64ToDataUri(val);
+      }
+      // if it's existingOrder base64 fields (may not be data:), detect by length/characters
+      if (typeof val === "string" && val.startsWith("/9j/")) {
+        return base64ToDataUri(val);
+      }
+      // else treat as file URI -> read as base64
+      try {
+        const b64 = await uriToBase64(val);
+        if (b64) return base64ToDataUri(b64);
+      } catch (e) {
+        // ignore
+      }
+      return null;
+    };
+
+    const assets = {};
+    assets.checkoutSignature = await resolveImageDataUri(checkoutSignatureUri || existingOrder?.customer_signature);
+    assets.checkinSignature = await resolveImageDataUri(checkinSignatureUri || existingOrder?.checkin_customer_signature);
+    assets.checkinAuthoritySignature = await resolveImageDataUri(checkinAuthoritySignatureUri || existingOrder?.checkin_signature);
+    assets.discountAuthSignature = await resolveImageDataUri(discountAuthSignatureUri || existingOrder?.discount_auth_signature);
+
+    const html = buildInvoiceHtml(invoiceType, assets);
     const { uri } = await Print.printToFileAsync({ html, base64: false });
     return uri;
   };
@@ -863,9 +955,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         // Print the Odoo PDF file directly
         await Print.printAsync({ uri: pdfUri });
       } else {
-        // Fallback to local HTML print
-        const html = buildInvoiceHtml(invoiceType);
-        await Print.printAsync({ html });
+        // Fallback to local HTML print (ensure images are resolved)
+        const localUri = await generateLocalPdf();
+        if (localUri) await Print.printAsync({ uri: localUri });
       }
       setShowInvoiceModal(false);
     } catch (e) {
@@ -907,6 +999,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   const handleSave = async () => {
     if (!validateOrder()) return;
+    // Quick local save + immediate navigation for snappy UX.
+    if (!validateOrder()) return;
     setSaving(true);
     try {
       const partnerId = await ensurePartnerId();
@@ -915,6 +1009,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         setSaving(false);
         return;
       }
+
       const orderValues = {
         partner_id: partnerId,
         date_planned_checkout: form.date_planned_checkout || false,
@@ -933,23 +1028,108 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         period_type: l.period_type || form.rental_period_type,
       }));
 
-      if (odooOrderId && odooAuth) {
-        await updateOrder(odooAuth, odooOrderId, orderValues);
-        showToastMessage("Order updated in Odoo");
-      } else if (odooAuth) {
-        await addOrder(odooAuth, orderValues, lineValues);
-        showToastMessage("Order created in Odoo");
-      } else {
-        showToastMessage("Order saved locally");
-      }
+      // Optimistic: navigate back immediately, perform server save in background
       savedRef.current = true;
+      showToastMessage("Saving order...");
       navigation.goBack();
+
+      (async () => {
+        try {
+          if (odooOrderId && odooAuth) {
+            await updateOrder(odooAuth, odooOrderId, orderValues);
+            showToastMessage("Order updated in Odoo");
+          } else if (odooAuth) {
+            await addOrder(odooAuth, orderValues, lineValues);
+            showToastMessage("Order created in Odoo");
+          } else {
+            showToastMessage("Order saved locally");
+          }
+        } catch (e) {
+          console.warn("Background save failed:", e.message);
+          showToastMessage("Background save failed: " + e.message);
+        }
+      })();
+      return;
     } catch (e) {
       showToastMessage("Save failed: " + e.message);
     } finally {
       setSaving(false);
     }
   };
+
+  // ---------- AUTO-SAVE PHONE NUMBER ----------
+  useEffect(() => {
+    if (!form.partner_phone || !form.partner_id || !odooAuth) return;
+    
+    // Validate phone number
+    const phoneValidationError = isPhone(form.partner_phone);
+    setPhoneError(phoneValidationError);
+    
+    // Don't auto-save if validation fails
+    if (phoneValidationError) {
+      if (phoneDebounceRef.current) {
+        clearTimeout(phoneDebounceRef.current);
+      }
+      return;
+    }
+    
+    if (phoneDebounceRef.current) {
+      clearTimeout(phoneDebounceRef.current);
+    }
+    
+    phoneDebounceRef.current = setTimeout(async () => {
+      try {
+        await updateCustomer(odooAuth, form.partner_id, { phone: form.partner_phone });
+        showToastMessage("Phone number saved");
+      } catch (e) {
+        console.warn("Failed to auto-save phone:", e.message);
+        showToastMessage("Failed to save phone number");
+      }
+    }, 1500); // Save after 1.5 seconds of inactivity
+
+    return () => {
+      if (phoneDebounceRef.current) {
+        clearTimeout(phoneDebounceRef.current);
+      }
+    };
+  }, [form.partner_phone, form.partner_id, odooAuth]);
+
+  // ---------- AUTO-SAVE EMAIL ADDRESS ----------
+  useEffect(() => {
+    if (!form.partner_email || !form.partner_id || !odooAuth) return;
+    
+    // Validate email
+    const emailValidationError = isEmail(form.partner_email);
+    setEmailError(emailValidationError);
+    
+    // Don't auto-save if validation fails
+    if (emailValidationError) {
+      if (emailDebounceRef.current) {
+        clearTimeout(emailDebounceRef.current);
+      }
+      return;
+    }
+    
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current);
+    }
+    
+    emailDebounceRef.current = setTimeout(async () => {
+      try {
+        await updateCustomer(odooAuth, form.partner_id, { email: form.partner_email });
+        showToastMessage("Email saved");
+      } catch (e) {
+        console.warn("Failed to auto-save email:", e.message);
+        showToastMessage("Failed to save email");
+      }
+    }, 1500); // Save after 1.5 seconds of inactivity
+
+    return () => {
+      if (emailDebounceRef.current) {
+        clearTimeout(emailDebounceRef.current);
+      }
+    };
+  }, [form.partner_email, form.partner_id, odooAuth]);
 
   // ---------- REFRESH TOOLS on every focus so available_qty is up-to-date ----------
   const lastFocusFetch = useRef(0);
@@ -1167,7 +1347,14 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   // ---------- SIGNATURE PAD ----------
   const openSignaturePad = (target) => {
+    // target: { setUri, setFlag, id }
     setActiveSignatureTarget(target);
+    // reset the drawing before showing
+    if (signatureRef.current) signatureRef.current.clearSignature();
+    // initialize tool settings to defaults
+    setSignStrokeColor((target && target.defaultColor) || "#000");
+    setSignStrokeWidth((target && target.defaultWidth) || 3);
+    setSignModeEraser(false);
     setShowSignaturePad(true);
   };
 
@@ -1180,9 +1367,21 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     try {
       const uri = await signatureRef.current.readSignature();
       if (uri) {
-        const { setUri, setFlag } = activeSignatureTarget;
+        const { setUri, setFlag, id } = activeSignatureTarget;
         setUri(uri);
-        setFlag(true);
+        if (typeof setFlag === 'function') setFlag(true);
+        // capture timestamp for this signature
+        const now = new Date().toISOString();
+        if (id === 'checkout') {
+          setCheckoutSignatureTime(now);
+          setForm((p) => ({ ...p, checkout_signature_time: now }));
+        } else if (id === 'checkin_customer') {
+          setCheckinSignatureTime(now);
+          setForm((p) => ({ ...p, checkin_signature_time: now }));
+        } else if (id === 'discount_auth') {
+          setDiscountAuthSignatureTime(now);
+          setForm((p) => ({ ...p, discount_auth_signature_time: now }));
+        }
         setShowSignaturePad(false);
         setActiveSignatureTarget(null);
         showToastMessage("Signature saved");
@@ -1497,7 +1696,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             ) : (
               <TouchableOpacity
                 style={styles.signBox}
-                onPress={() => openSignaturePad({ setUri: setCheckoutSignatureUri, setFlag: setCheckoutSignature })}
+                onPress={() => openSignaturePad({ setUri: setCheckoutSignatureUri, setFlag: setCheckoutSignature, id: 'checkout' })}
               >
                 <Text style={{ fontSize: 28, marginBottom: 4 }}>{"\u270D\uFE0F"}</Text>
                 <Text style={styles.signBoxText}>Tap to Sign</Text>
@@ -1715,7 +1914,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             ) : (
               <TouchableOpacity
                 style={styles.signBox}
-                onPress={() => openSignaturePad({ setUri: setCheckinSignatureUri, setFlag: setCheckinSignature })}
+                onPress={() => openSignaturePad({ setUri: setCheckinSignatureUri, setFlag: setCheckinSignature, id: 'checkin_customer' })}
               >
                 <Text style={{ fontSize: 28, marginBottom: 4 }}>{"\u270D\uFE0F"}</Text>
                 <Text style={styles.signBoxText}>Tap to Sign</Text>
@@ -1743,7 +1942,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             ) : (
               <TouchableOpacity
                 style={styles.signBox}
-                onPress={() => openSignaturePad({ setUri: setCheckinAuthoritySignatureUri, setFlag: setCheckinAuthoritySignature })}
+                onPress={() => openSignaturePad({ setUri: setCheckinAuthoritySignatureUri, setFlag: setCheckinAuthoritySignature, id: 'checkin_authority' })}
               >
                 <Text style={{ fontSize: 28, marginBottom: 4 }}>{"\u270D\uFE0F"}</Text>
                 <Text style={styles.signBoxText}>Tap to Sign</Text>
@@ -1860,41 +2059,46 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Invalid", "Enter discount for at least one line");
       return;
     }
+    // Apply locally and close modal immediately for snappy UI
     setForm((prev) => ({ ...prev, discount_amount: totalDiscount.toFixed(2) }));
-    // Update line-level discounts in local state
     setLines((prev) => prev.map((l, idx) => {
       const dl = discountLines[idx];
       if (!dl) return l;
       return { ...l, discount_type: dl.discount_type, discount_value: dl.discount_value };
     }));
-    // Save everything to Odoo so it persists across navigation
-    if (odooOrderId && odooAuth) {
-      try {
-        // 1. Save order-level: auth name, auth images, discount_amount
-        const discountVals = { discount_amount: totalDiscount };
-        if (discountAuthName.trim()) discountVals.discount_authorized_by = discountAuthName.trim();
-        const sigB64 = await uriToBase64(discountAuthSignatureUri);
-        if (sigB64) discountVals.discount_auth_signature = sigB64;
-        const photoB64 = await uriToBase64(discountAuthPhotoUri);
-        if (photoB64) discountVals.discount_auth_photo = photoB64;
-        await updateOrderValues(odooAuth, odooOrderId, discountVals);
-        // 2. Save per-line discount_type and discount_value to Odoo
-        for (let i = 0; i < lines.length; i++) {
-          const dl = discountLines[i];
-          const lineOdooId = lines[i].odoo_id;
-          if (dl && lineOdooId) {
-            await updateOrderLineValues(odooAuth, lineOdooId, {
-              discount_type: dl.discount_type || false,
-              discount_value: parseFloat(dl.discount_value) || 0,
-            });
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to save discount data:", e.message);
-      }
-    }
     setShowDiscountModal(false);
-    showToastMessage("Discount applied: $" + totalDiscount.toFixed(2));
+    showToastMessage("Applying discount...");
+
+    // Save in background
+    (async () => {
+      if (odooOrderId && odooAuth) {
+        try {
+          const discountVals = { discount_amount: totalDiscount };
+          if (discountAuthName.trim()) discountVals.discount_authorized_by = discountAuthName.trim();
+          const sigB64 = await uriToBase64(discountAuthSignatureUri);
+          if (sigB64) discountVals.discount_auth_signature = sigB64;
+          const photoB64 = await uriToBase64(discountAuthPhotoUri);
+          if (photoB64) discountVals.discount_auth_photo = photoB64;
+          await updateOrderValues(odooAuth, odooOrderId, discountVals);
+          for (let i = 0; i < lines.length; i++) {
+            const dl = discountLines[i];
+            const lineOdooId = lines[i].odoo_id;
+            if (dl && lineOdooId) {
+              await updateOrderLineValues(odooAuth, lineOdooId, {
+                discount_type: dl.discount_type || false,
+                discount_value: parseFloat(dl.discount_value) || 0,
+              });
+            }
+          }
+          showToastMessage("Discount applied: $" + totalDiscount.toFixed(2));
+        } catch (e) {
+          console.warn("Failed to save discount data:", e.message);
+          showToastMessage("Failed to save discount: " + e.message);
+        }
+      } else {
+        showToastMessage("Discount applied");
+      }
+    })();
   };
 
   const removeDiscount = async () => {
@@ -1969,7 +2173,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 ) : (
                   <TouchableOpacity
                     style={{ borderWidth: 1.5, borderColor: "#FF9800", borderStyle: "dashed", borderRadius: 8, paddingVertical: 28, alignItems: "center", marginBottom: 16, backgroundColor: "#FFF8E1" }}
-                    onPress={() => openSignaturePad({ setUri: setDiscountAuthSignatureUri, setFlag: () => { } })}
+                    onPress={() => openSignaturePad({ setUri: setDiscountAuthSignatureUri, setFlag: () => { }, id: 'discount_auth' })}
                   >
                     <Text style={{ fontSize: 22 }}>&#9997;</Text>
                     <Text style={{ color: "#FF9800", fontWeight: "600", marginTop: 4 }}>Tap to Sign</Text>
@@ -2011,11 +2215,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
                 {/* Next Button */}
                 <View style={styles.modalBtnRow}>
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: "#FF9800" }]} onPress={discountGoNext}>
-                    <Text style={styles.modalBtnText}>Next</Text>
-                  </TouchableOpacity>
                   <TouchableOpacity style={[styles.modalBtn, { backgroundColor: "#9E9E9E" }]} onPress={() => setShowDiscountModal(false)}>
                     <Text style={styles.modalBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: "#FF9800" }]} onPress={discountGoNext}>
+                    <Text style={styles.modalBtnText}>Next</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -2295,13 +2499,14 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               <View style={styles.colHalf}>
                 <TextInput
                   label="Phone"
-                  placeholder="Phone number"
+                  placeholder="Phone number (10 digits)"
                   value={form.partner_phone}
                   onChangeText={(t) => handleChange("partner_phone", t)}
                   keyboardType="phone-pad"
-                  editable={isEditable && !form.partner_id}
+                  editable={isEditable}
                   column
                 />
+                {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
               </View>
               <View style={styles.colHalf}>
                 <TextInput
@@ -2310,9 +2515,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   value={form.partner_email}
                   onChangeText={(t) => handleChange("partner_email", t)}
                   keyboardType="email-address"
-                  editable={isEditable && !form.partner_id}
+                  editable={isEditable}
                   column
                 />
+                {emailError && <Text style={styles.errorText}>{emailError}</Text>}
               </View>
             </View>
 
@@ -2502,7 +2708,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={styles.lineMetricLabel}>
                         Duration ({{ day: "Days", week: "Weeks", month: "Months" }[line.period_type || "day"] || "Days"})
                       </Text>
-                      {(state === "draft" || state === "confirmed") ? (
+                      {state === "draft" ? (
                         <TextInput
                           placeholder="1"
                           value={line.planned_duration !== "" ? String(line.planned_duration || "1") : ""}
@@ -2941,24 +3147,83 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <Text style={styles.modalClose}>X</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.signPadCanvas}>
-              <SignaturePad
-                ref={signatureRef}
-                style={{ flex: 1 }}
-                strokeColor="#000"
-                strokeWidth={3}
-              />
-            </View>
-            <View style={styles.signPadBtnRow}>
-              <TouchableOpacity style={[styles.signPadBtn, { backgroundColor: "#9E9E9E" }]} onPress={handleSignatureClear}>
-                <Text style={styles.signPadBtnText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.signPadBtn, { backgroundColor: "#4CAF50" }]}
-                onPress={handleSignatureSave}
-              >
-                <Text style={styles.signPadBtnText}>Save Signature</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', flex: 1 }}>
+              <View style={styles.signToolsColumn}>
+                <Text style={styles.toolsTitle}>Signature Tools</Text>
+                <TouchableOpacity style={[styles.toolBtn, signModeEraser ? styles.toolBtnActive : null]} onPress={() => setSignModeEraser(false)}>
+                  <Text style={styles.toolBtnText}>Pen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.toolBtn, signModeEraser ? styles.toolBtnActive : null, { marginTop: 6 }]} onPress={() => setSignModeEraser(true)}>
+                  <Text style={styles.toolBtnText}>Eraser</Text>
+                </TouchableOpacity>
+
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ fontSize: 12, color: '#666' }}>Size</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+                    <TouchableOpacity onPress={() => setSignStrokeWidth((w) => Math.max(1, w - 1))} style={styles.sizeBtn}><Text>-</Text></TouchableOpacity>
+                    <View style={{ flex: 1, alignItems: 'center' }}><Text>{signStrokeWidth}px</Text></View>
+                    <TouchableOpacity onPress={() => setSignStrokeWidth((w) => Math.min(20, w + 1))} style={styles.sizeBtn}><Text>+</Text></TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ fontSize: 12, color: '#666' }}>Ink Color</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+                    {['#000','#1E88E5','#E53935','#43A047','#8E24AA','#000000','#37474F'].map((c) => (
+                      <TouchableOpacity key={c} onPress={() => { setSignStrokeColor(c); setSignModeEraser(false); }} style={[styles.colorDot, { backgroundColor: c, borderWidth: signStrokeColor === c ? 2 : 0 }]} />
+                    ))}
+                  </View>
+                </View>
+
+                <TouchableOpacity style={[styles.toolActionBtn, { marginTop: 18 }]} onPress={() => { if (signatureRef.current) signatureRef.current.clearSignature(); showToastMessage('Cleared'); }}>
+                  <Text style={{ color: '#E53935' }}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.toolActionBtn, { marginTop: 8 }]} onPress={async () => {
+                  try {
+                    const res = await DocumentPicker.getDocumentAsync({ type: 'image/*' });
+                    if (res.type === 'success' && activeSignatureTarget) {
+                      const { setUri, setFlag, id } = activeSignatureTarget;
+                      setUri(res.uri);
+                      if (typeof setFlag === 'function') setFlag(true);
+                      const now = new Date().toISOString();
+                      if (id === 'checkout') setCheckoutSignatureTime(now);
+                      else if (id === 'checkin_customer') setCheckinSignatureTime(now);
+                      else if (id === 'discount_auth') setDiscountAuthSignatureTime(now);
+                      setShowSignaturePad(false);
+                      setActiveSignatureTarget(null);
+                      showToastMessage('Image uploaded');
+                    }
+                  } catch (e) {
+                    showToastMessage('Upload failed');
+                  }
+                }}>
+                  <Text style={{ color: '#1976D2' }}>Upload</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.signPadCanvas}>
+                <SignaturePad
+                  ref={signatureRef}
+                  style={{ flex: 1 }}
+                  strokeColor={signModeEraser ? '#fff' : signStrokeColor}
+                  strokeWidth={signStrokeWidth}
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8 }}>
+                  <Text style={{ fontSize: 12, color: '#666' }}>{activeSignatureTarget?.id ? activeSignatureTarget.id.replace('_', ' ').toUpperCase() : ''}</Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>{/* placeholder for timestamp */}</Text>
+                </View>
+                <View style={styles.signPadBtnRow}>
+                  <TouchableOpacity style={[styles.signPadBtn, { backgroundColor: '#9E9E9E' }]} onPress={() => { if (signatureRef.current) signatureRef.current.clearSignature(); }}>
+                    <Text style={styles.signPadBtnText}>Clear</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.signPadBtn, { backgroundColor: '#4CAF50' }]}
+                    onPress={handleSignatureSave}
+                  >
+                    <Text style={styles.signPadBtnText}>Save Signature</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           </View>
         </View>
@@ -3584,6 +3849,14 @@ const styles = StyleSheet.create({
 
   // Signature Pad Modal
   signPadModal: { backgroundColor: "#fff", borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, height: "60%", marginTop: "auto" },
+  signToolsColumn: { width: 160, paddingRight: 12, borderRightWidth: 1, borderRightColor: '#eee' },
+  toolsTitle: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  toolBtn: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#f6f6f6', marginTop: 6 },
+  toolBtnActive: { backgroundColor: '#E3F2FD' },
+  toolBtnText: { color: '#333' },
+  sizeBtn: { width: 32, height: 32, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
+  colorDot: { width: 28, height: 28, borderRadius: 14, marginRight: 8, marginBottom: 8, borderColor: '#fff' },
+  toolActionBtn: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', alignItems: 'center' },
   signPadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   signPadTitle: { fontSize: 18, fontWeight: "700", color: COLORS.black },
   signPadCanvas: { flex: 1, borderRadius: 8, borderWidth: 1, borderColor: "#ddd", overflow: "hidden" },

@@ -458,6 +458,20 @@ export const createCustomer = async (auth, values) => {
   return newId;
 };
 
+export const updateCustomer = async (auth, customerId, values) => {
+  const odooValues = {};
+  if (values.phone !== undefined) {
+    odooValues.phone = values.phone || false;
+  }
+  if (values.email !== undefined) {
+    odooValues.email = values.email || false;
+  }
+  if (values.name !== undefined) {
+    odooValues.name = values.name;
+  }
+  await odooWrite(auth, "res.partner", [customerId], odooValues);
+};
+
 // =============================================
 // PRICING RULES - rental.pricing
 // =============================================
@@ -515,5 +529,6 @@ export default {
   openCheckinWizard,
   fetchCustomers,
   createCustomer,
+  updateCustomer,
   fetchPricingRules,
 };

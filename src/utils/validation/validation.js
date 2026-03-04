@@ -6,17 +6,23 @@ export const isRequired = (value) => {
 };
 
 export const isEmail = (value) => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // Stricter email validation with proper structure (example: user@gmail.com)
+  const emailRegex = /^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (value && !emailRegex.test(value)) {
-    return "Invalid email address";
+    return "Invalid email format (example: user@gmail.com)";
   }
   return null;
 };
 
 export const isPhone = (value) => {
-  const phoneRegex = /^[0-9]{10,15}$/;
-  if (value && !phoneRegex.test(value)) {
-    return "Invalid phone number";
+  if (!value) return null;
+  
+  // Extract only digits from the value (removes +, -, (, ), spaces, etc.)
+  const digitsOnly = value.replace(/\D/g, "");
+  
+  // Check if there are exactly 10 digits
+  if (digitsOnly.length !== 10) {
+    return "Phone number must contain exactly 10 digits";
   }
   return null;
 };
