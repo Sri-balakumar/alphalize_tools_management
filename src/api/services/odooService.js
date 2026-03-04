@@ -152,7 +152,10 @@ const ORDER_LINE_FIELDS = [
   "discount_type", "discount_value", "discount_line_amount", "notes",
 ];
 
-const ORDER_LINE_IMAGE_FIELDS = ["checkout_tool_image"];
+const ORDER_LINE_IMAGE_FIELDS = [
+  "checkout_tool_image", "checkout_tool_image_timestamp",
+  "checkin_tool_image", "checkin_tool_image_timestamp"
+];
 
 export const fetchOrders = async (auth, domain = []) => {
   const records = await odooSearchRead(auth, "rental.order", domain, ORDER_FIELDS, { order: "id desc", limit: 50 });
@@ -280,6 +283,7 @@ export const fetchOrderLineImages = async (auth, lineIds) => {
   return records.map((r) => ({
     id: r.id,
     checkout_tool_image: r.checkout_tool_image || false,
+    checkout_tool_image_timestamp: r.checkout_tool_image_timestamp || false,
   }));
 };
 
@@ -338,6 +342,8 @@ const mapOrder = (r, lines = [], timesheet = []) => ({
   rental_period_type: r.rental_period_type || "day",
   rental_duration: String(r.rental_duration || 1),
   actual_duration: r.actual_duration_display || "",
+  date_checkout_raw: r.date_checkout || "",
+  date_checkin_raw: r.date_checkin || "",
   advance_amount: String(r.advance_amount || 0),
   advance_returned: r.advance_returned || false,
   amount_due: r.amount_due || 0,
@@ -387,9 +393,10 @@ const mapOrderLine = (l) => ({
   discount_type: l.discount_type || "",
   discount_value: String(l.discount_value || 0),
   notes: l.notes || "",
-  extra_days: "0",
-  late_fee_per_day: "0",
+  extra_days: String(Math.max(0, (parseInt(l.actual_duration) || 0) - (parseInt(l.planned_duration) || 0))),
+  late_fee_per_day: String(l.late_fee_per_day || 0),
   checkout_tool_image: l.checkout_tool_image || false,
+  checkout_tool_image_timestamp: l.checkout_tool_image_timestamp || "",
 });
 
 const mapTimesheet = (t) => ({

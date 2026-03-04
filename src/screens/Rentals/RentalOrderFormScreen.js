@@ -84,6 +84,13 @@ const base64ToDataUri = (b64, mimeType = "image/png") => {
   return `data:${mimeType};base64,${b64}`;
 };
 
+const DetailItem = ({ label, value, color }) => (
+  <View style={{ marginBottom: 10 }}>
+    <Text style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>{label}</Text>
+    <Text style={{ fontSize: 14, fontWeight: "700", color: color || "#333" }}>{value || "-"}</Text>
+  </View>
+);
+
 const RentalOrderFormScreen = ({ navigation, route }) => {
   const existingOrder = route?.params?.order;
   const odooAuth = useAuthStore((s) => s.odooAuth);
@@ -115,6 +122,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     date_planned_checkin: existingOrder?.date_planned_checkin || "",
     date_checkout: existingOrder?.date_checkout || "",
     date_checkin: existingOrder?.date_checkin || "",
+    date_checkout_raw: existingOrder?.date_checkout_raw || "",
     rental_period_type: existingOrder?.rental_period_type || "day",
     rental_duration: existingOrder?.rental_duration?.toString() || "1",
     actual_duration: existingOrder?.actual_duration || "",
@@ -136,6 +144,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [checkoutIdProof, setCheckoutIdProof] = useState(false);
   const [idProofUri, setIdProofUri] = useState(null);
   const [toolPhotoUris, setToolPhotoUris] = useState({});
+  const [toolPhotoTimestamps, setToolPhotoTimestamps] = useState({});
+  const [toolCheckinPhotoUris, setToolCheckinPhotoUris] = useState({});
+  const [toolCheckinPhotoTimestamps, setToolCheckinPhotoTimestamps] = useState({});
+  const [idProofTimestamp, setIdProofTimestamp] = useState(null);
   const [checkoutSignature, setCheckoutSignature] = useState(false);
   const [checkoutSignatureUri, setCheckoutSignatureUri] = useState(null);
   const [checkinSignatureUri, setCheckinSignatureUri] = useState(null);
@@ -144,6 +156,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [checkinReturnAdvance, setCheckinReturnAdvance] = useState(existingOrder?.advance_returned || false);
   const [checkinSignature, setCheckinSignature] = useState(false);
   const [checkinAuthoritySignature, setCheckinAuthoritySignature] = useState(false);
+  const [checkinAuthoritySignatureTime, setCheckinAuthoritySignatureTime] = useState(existingOrder?.checkin_authority_signature_time || null);
+  const [discountAuthPhotoTime, setDiscountAuthPhotoTime] = useState(existingOrder?.discount_auth_photo_time || null);
   const [checkinSignerName, setCheckinSignerName] = useState(existingOrder?.checkin_signer_name || "");
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
@@ -176,6 +190,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [invoicePrinting, setInvoicePrinting] = useState(false);
   const [phoneError, setPhoneError] = useState(null);
   const [emailError, setEmailError] = useState(null);
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
 
   // Debounce refs for auto-saving phone and email
   const phoneDebounceRef = useRef(null);
@@ -191,7 +206,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       setErrors((prev) => ({ ...prev, rental_period_type: null }));
       return;
     }
-    
+
     // Special handling for phone number - limit to 10 digits only
     if (field === "partner_phone") {
       const digitsOnly = value.replace(/\D/g, "");
@@ -200,9 +215,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         return; // Don't update if more than 10 digits
       }
     }
-    
+
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: null }));
+    if (field === "partner_phone") setPhoneError(null);
+    if (field === "partner_email") setEmailError(null);
   };
 
   // ---------- CUSTOMER AUTOCOMPLETE ----------
@@ -221,6 +238,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       partner_email: customer.email || "",
       partner_id: customer.odoo_id || parseInt(customer.id) || null,
     }));
+    setIsNewCustomer(false);
     setShowCustomerDropdown(false);
   };
 
@@ -232,6 +250,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       partner_email: "",
       partner_id: null,
     }));
+    setIsNewCustomer(false);
     setShowCustomerDropdown(false);
   };
 
@@ -361,9 +380,23 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   };
 
   const calcSubtotal = () => lines.reduce((sum, l) => sum + calcLineTotal(l), 0);
-  const calcLateFees = () => lines.reduce((sum, l) => sum + (parseFloat(l.late_fee_amount) || 0), 0);
+  const calcLateFees = () => lines.reduce((sum, l) => {
+    const amt = parseFloat(l.late_fee_amount) || 0;
+    return sum + amt;
+  }, 0);
   const calcDamageCharges = () => lines.reduce((sum, l) => sum + (parseFloat(l.damage_charge) || 0), 0);
-  const calcTotal = () => calcSubtotal() + calcLateFees() + calcDamageCharges() - (parseFloat(form.discount_amount) || 0) - (parseFloat(form.advance_amount) || 0);
+
+  // Grand Total = Subtotal + LateFees + Damage - Discount
+  const calcGrandTotal = () => {
+    return calcSubtotal() + calcLateFees() + calcDamageCharges() - (parseFloat(form.discount_amount) || 0);
+  };
+
+  // Amount Due = GrandTotal - Advance (if not returned)
+  const calcTotal = () => {
+    const grand = calcGrandTotal();
+    const advance = form.advance_returned ? 0 : (parseFloat(form.advance_amount) || 0);
+    return grand - advance;
+  };
 
   // ---------- WORKFLOW ACTIONS ----------
   const validateOrder = () => {
@@ -384,7 +417,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         phone: form.partner_phone || "",
         email: form.partner_email || "",
       });
+      setIsNewCustomer(true);
       setForm((prev) => ({ ...prev, partner_id: newId }));
+      setShowCustomerDropdown(false);
+      showToastMessage("New customer created: " + form.partner_name);
       return newId;
     } catch (e) {
       showToastMessage("Failed to create customer: " + e.message);
@@ -463,15 +499,25 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Required", "Set condition for all tools before check-out");
       return;
     }
-    if (!checkoutIdProof) {
+    if (!idProofUri) {
       Alert.alert("Required", "ID Proof is mandatory for check-out");
+      return;
+    }
+    if (!checkoutSignatureUri) {
+      Alert.alert("Required", "Please provide customer signature for check-out");
       return;
     }
     // Optimistic: close modal and update UI immediately
     setShowCheckoutModal(false);
     savedRef.current = true;
     setState("checked_out");
-    setForm((prev) => ({ ...prev, date_checkout: today(), actual_duration: form.rental_duration + " Day" }));
+    const now = new Date();
+    setForm((prev) => ({
+      ...prev,
+      date_checkout: now.toLocaleString(),
+      date_checkout_raw: now.toISOString(),
+      actual_duration: form.rental_duration + " Day"
+    }));
     addTimesheetEntry("checkout", "None \u2192 " + today() + " (Actual Check-Out)");
     addTimesheetEntry("note", "Confirmed \u2192 Checked Out (Status)");
     showToastMessage("Checking out... ");
@@ -489,12 +535,22 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             await updateOrderValues(odooAuth, odooOrderId, imageVals);
           }
           for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineOdooId = line.odoo_id;
             const photoUri = toolPhotoUris[i];
-            const lineOdooId = lines[i].odoo_id;
-            if (photoUri && lineOdooId) {
+            const timestamp = toolPhotoTimestamps[i];
+            if (lineOdooId && photoUri) {
               const photoB64 = await uriToBase64(photoUri);
               if (photoB64) {
-                await updateOrderLineValues(odooAuth, lineOdooId, { checkout_tool_image: photoB64 });
+                const updateVals = {
+                  checkout_tool_image: photoB64,
+                  checkout_condition: line.checkout_condition
+                };
+                if (timestamp) updateVals.checkout_tool_image_timestamp = timestamp;
+                await updateOrderLineValues(odooAuth, lineOdooId, updateVals);
+              } else {
+                // If no photo, still send condition
+                await updateOrderLineValues(odooAuth, lineOdooId, { checkout_condition: line.checkout_condition });
               }
             }
           }
@@ -513,16 +569,47 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     // extra = max(actual - planned, 0)
     const checkinDate = new Date();
     checkinDate.setHours(0, 0, 0, 0);
+
     let checkoutDate = null;
-    if (form.date_checkout) {
-      const parsed = new Date(form.date_checkout);
-      if (!isNaN(parsed.getTime())) { parsed.setHours(0, 0, 0, 0); checkoutDate = parsed; }
+    const rawDate = form.date_checkout_raw || form.date_checkout;
+    if (rawDate) {
+      const parsed = new Date(rawDate);
+      if (!isNaN(parsed.getTime())) {
+        parsed.setHours(0, 0, 0, 0);
+        checkoutDate = parsed;
+      }
     }
+
+    // Fallback if direct parse fails (regex for dd/mm/yyyy or mm/dd/yyyy)
+    if (!checkoutDate && typeof rawDate === 'string' && rawDate.includes('/')) {
+      const parts = rawDate.split(',')[0].split('/');
+      if (parts.length === 3) {
+        // Try day/month/year (Indian/UK style)
+        const d = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        const y = parseInt(parts[2]);
+        const fallbackDate = new Date(y, m, d);
+        if (!isNaN(fallbackDate.getTime())) {
+          fallbackDate.setHours(0, 0, 0, 0);
+          checkoutDate = fallbackDate;
+        }
+      }
+    }
+
     const plannedDays = parseInt(form.rental_duration) || 0;
+    // Calculate actual days between checkout and checkin. If same day, count as 1.
+    const diffMs = checkoutDate ? (checkinDate.getTime() - checkoutDate.getTime()) : 0;
     const actualDays = checkoutDate
-      ? Math.max(Math.round((checkinDate - checkoutDate) / 86400000), 1)
+      ? Math.max(Math.round(diffMs / 86400000), 1)
       : plannedDays || 1;
     const extraDaysCalc = plannedDays > 0 ? Math.max(actualDays - plannedDays, 0) : 0;
+
+    // Update form status for the invoice header
+    setForm((prev) => ({
+      ...prev,
+      actual_duration: String(actualDays) + " Day" + (actualDays > 1 ? "s" : ""),
+      date_checkin: new Date().toLocaleString(),
+    }));
 
     // Auto-populate late_fee_per_day and extra_days
     setLines((prev) => prev.map((line) => {
@@ -556,6 +643,19 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Required", "Set condition for all tools before check-in");
       return;
     }
+    if (!checkinSignatureUri) {
+      Alert.alert("Required", "Customer signature is mandatory for check-in");
+      return;
+    }
+    if (!checkinAuthoritySignatureUri) {
+      Alert.alert("Required", "Authority signature is mandatory for check-in");
+      return;
+    }
+    if (!checkinSignerName || !checkinSignerName.trim()) {
+      Alert.alert("Required", "Signer name is mandatory for check-in");
+      return;
+    }
+
     setSaving(true);
     try {
       if (odooOrderId && odooAuth) {
@@ -568,6 +668,25 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         if (Object.keys(imageVals).length > 0) {
           await updateOrderValues(odooAuth, odooOrderId, imageVals);
         }
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const lineOdooId = line.odoo_id;
+          const photoUri = toolCheckinPhotoUris[i]; // Use checkin photo URI
+          const timestamp = toolCheckinPhotoTimestamps[i]; // Use checkin photo timestamp
+          if (lineOdooId) {
+            const updateVals = {
+              checkin_condition: line.checkin_condition,
+            };
+            if (photoUri) {
+              const photoB64 = await uriToBase64(photoUri);
+              if (photoB64) {
+                updateVals.checkin_tool_image = photoB64;
+                if (timestamp) updateVals.checkin_tool_image_timestamp = timestamp;
+              }
+            }
+            await updateOrderLineValues(odooAuth, lineOdooId, updateVals);
+          }
+        }
         // Then call the checkin action
         await storeCheckinOrder(odooAuth, odooOrderId);
       }
@@ -576,7 +695,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       savedRef.current = true;
       setForm((prev) => ({
         ...prev,
-        date_checkin: today(),
+        date_checkin: new Date().toLocaleString(),
         advance_returned: checkinReturnAdvance,
       }));
       setLines((prev) => prev.map((l) => ({ ...l, returned_qty: l.quantity })));
@@ -620,7 +739,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     const damageCharges = calcDamageCharges();
     const discount = parseFloat(form.discount_amount) || 0;
     const advance = parseFloat(form.advance_amount) || 0;
-    const totalAmt = parseFloat(existingOrder?.total_amount) || (subtotal + lateFees + damageCharges - discount);
+    const grandTotal = subtotal + lateFees + damageCharges - discount;
+    const amountDue = grandTotal - (form.advance_returned ? 0 : advance);
+    const totalAmt = grandTotal; // For compatibility with existing total row display
     const cur = "$";
 
     // --- Checkout tool rows ---
@@ -670,7 +791,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td>${l.checkin_condition || ""}</td>
         <td class="text-end">${cur}${(parseFloat(l.unit_price) || 0).toFixed(2)}</td>
         <td class="text-end">${parseInt(l.planned_duration) || 1}</td>
-        <td class="text-end" ${latePerDay > 0 ? 'style="color:red;font-weight:bold"' : ""}>${cur}${latePerDay.toFixed(2)}</td>
+        <td class="text-end" ${parseInt(l.extra_days) > 0 ? 'style="color:red;font-weight:bold"' : ""}>${l.extra_days || "0"}</td>
         <td class="text-end" ${lateFee > 0 ? 'style="color:red;font-weight:bold"' : ""}>${cur}${lateFee.toFixed(2)}</td>
         <td>${l.damage_note || ""}</td>
         <td class="text-end" ${dmg > 0 ? 'style="color:red;font-weight:bold"' : ""}>${cur}${dmg.toFixed(2)}</td>
@@ -727,7 +848,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </div>
     </div>
 
-    ${ (form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
+    ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
 
     <!-- Rental Details -->
     <table class="details">
@@ -780,7 +901,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     </table>` : `<table class="tools">
       <thead><tr>
         <th>#</th><th>Tool</th><th>Serial No.</th><th>Out Condition</th><th>In Condition</th>
-        <th class="text-end">Price/Day</th><th class="text-end">Duration</th><th class="text-end">Late Fee/Day</th>
+        <th class="text-end">Price/Day</th><th class="text-end">Duration</th><th class="text-end">Extra Days</th>
         <th class="text-end">Late Fee</th><th>Damage Note</th><th class="text-end">Damage Charge</th><th class="text-end">Discount</th>
       </tr></thead>
       <tbody>${checkinToolRows}</tbody>
@@ -789,12 +910,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     <!-- Totals -->
     <table class="totals">
       <tr><td><strong>Subtotal:</strong></td><td class="text-end">${cur}${subtotal.toFixed(2)}</td></tr>
-      ${isCheckin && lateFees > 0 ? `<tr style="color:red;font-weight:bold"><td>Late Fees:</td><td class="text-end">${cur}${lateFees.toFixed(2)}</td></tr>` : ""}
-      ${isCheckin && damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage Charges:</td><td class="text-end">${cur}${damageCharges.toFixed(2)}</td></tr>` : ""}
+      ${lateFees > 0 ? `<tr style="color:red;font-weight:bold"><td>Late Fees:</td><td class="text-end">${cur}${lateFees.toFixed(2)}</td></tr>` : ""}
+      ${damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage Charges:</td><td class="text-end">${cur}${damageCharges.toFixed(2)}</td></tr>` : ""}
       ${discount > 0 ? `<tr style="color:green;font-weight:bold"><td>Discount:</td><td class="text-end">-${cur}${discount.toFixed(2)}</td></tr>` : ""}
-      ${isCheckin ? `<tr class="grand-row"><td><strong>TOTAL:</strong></td><td class="text-end"><strong>${cur}${totalAmt.toFixed(2)}</strong></td></tr>` : ""}
-      ${advance > 0 && !form.advance_returned ? `<tr><td>Advance Paid (-):</td><td class="text-end">-${cur}${advance.toFixed(2)}</td></tr>
-      <tr class="grand-row"><td><strong>Amount Due:</strong></td><td class="text-end"><strong>${cur}${(parseFloat(existingOrder?.amount_due) || Math.max(totalAmt - advance, 0)).toFixed(2)}</strong></td></tr>` : ""}
+      <tr class="grand-row"><td><strong>TOTAL:</strong></td><td class="text-end"><strong>${cur}${grandTotal.toFixed(2)}</strong></td></tr>
+      ${advance > 0 && !form.advance_returned ? `<tr><td>Advance Paid (-):</td><td class="text-end">-${cur}${advance.toFixed(2)}</td></tr>` : ""}
+      <tr class="grand-row" style="background-color:#f9f9f9"><td><strong>Amount Due:</strong></td><td class="text-end"><strong>${cur}${amountDue.toFixed(2)}</strong></td></tr>
     </table>
 
     ${isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin-top:10px">
@@ -810,35 +931,41 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     <div class="sig-row">
       <div class="sig-col">
         ${(() => {
-          const sigImg = isCheckin ? (assets.checkinSignature || assets.checkoutSignature) : (assets.checkoutSignature || assets.checkinSignature);
-          const sigName = form.partner_name || "";
-          const sigTime = isCheckin
-            ? (form.checkin_signature_time || form.date_checkin || form.date_checkout || new Date().toLocaleString())
-            : (form.checkout_signature_time || form.date_checkout || form.date_order || new Date().toLocaleString());
-          if (sigImg) {
-            return `<img src="${sigImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Customer</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
-          }
-          return `<hr/><div><strong>Customer Signature</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
-        })()}
+        const sigImg = isCheckin ? (assets.checkinSignature || assets.checkoutSignature) : (assets.checkoutSignature || assets.checkinSignature);
+        const sigName = form.partner_name || "";
+        const sigTime = isCheckin
+          ? (form.checkin_signature_time || form.date_checkin || form.date_checkout || new Date().toLocaleString())
+          : (form.checkout_signature_time
+            ? new Date(form.checkout_signature_time).toLocaleString()
+            : form.date_checkout || form.date_order || new Date().toLocaleString());
+        if (sigImg) {
+          return `<img src="${sigImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Customer</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
+        }
+        return `<hr/><div><strong>Customer Signature</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
+      })()}
       </div>
       <div class="sig-col">
         ${(() => {
-          const authImg = isCheckin ? (assets.checkinAuthoritySignature || assets.discountAuthSignature) : (assets.discountAuthSignature || assets.checkinAuthoritySignature);
-          const authName = isCheckin ? (form.responsible || "Admin") : (discountAuthName || form.responsible || "Admin");
-          const authTime = isCheckin
-            ? (form.checkin_signature_time || form.date_checkin || new Date().toLocaleString())
-            : (form.discount_auth_signature_time || form.date_order || new Date().toLocaleString());
-          if (authImg) {
-            return `<img src="${authImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Authority</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
-          }
-          return `<hr/><div><strong>Authority Signature</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
-        })()}
+        const authImg = isCheckin ? (assets.checkinAuthoritySignature || assets.discountAuthSignature) : (assets.discountAuthSignature || assets.checkinAuthoritySignature);
+        const authName = isCheckin ? (form.responsible || "Admin") : (discountAuthName || form.responsible || "Admin");
+        const authTime = isCheckin
+          ? (form.checkin_signature_time
+            ? new Date(form.checkin_signature_time).toLocaleString()
+            : form.date_checkin || new Date().toLocaleString())
+          : (form.discount_auth_signature_time
+            ? new Date(form.discount_auth_signature_time).toLocaleString()
+            : form.date_order || new Date().toLocaleString());
+        if (authImg) {
+          return `<img src="${authImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Authority</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
+        }
+        return `<hr/><div><strong>Authority Signature</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
+      })()}
       </div>
       ${assets.discountAuthSignature ? `<div class="sig-col">
         <img src="${assets.discountAuthSignature}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/>
         <div><strong>Discount Authorizer</strong></div>
         <div>${discountAuthName || ""}</div>
-        <div style="font-size:11px;color:#666">${new Date().toLocaleString()}</div>
+        <div style="font-size:11px;color:#666">${new Date(form.discount_auth_signature_time).toLocaleString()}</div>
       </div>` : ""}
     </div>
 
@@ -1060,11 +1187,17 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   // ---------- AUTO-SAVE PHONE NUMBER ----------
   useEffect(() => {
     if (!form.partner_phone || !form.partner_id || !odooAuth) return;
-    
+
     // Validate phone number
+    if (!form.partner_phone || form.partner_phone.trim() === "") {
+      setPhoneError(null);
+      if (phoneDebounceRef.current) clearTimeout(phoneDebounceRef.current);
+      return;
+    }
+
     const phoneValidationError = isPhone(form.partner_phone);
     setPhoneError(phoneValidationError);
-    
+
     // Don't auto-save if validation fails
     if (phoneValidationError) {
       if (phoneDebounceRef.current) {
@@ -1072,18 +1205,18 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       }
       return;
     }
-    
-    if (phoneDebounceRef.current) {
-      clearTimeout(phoneDebounceRef.current);
-    }
-    
+
     phoneDebounceRef.current = setTimeout(async () => {
       try {
         await updateCustomer(odooAuth, form.partner_id, { phone: form.partner_phone });
-        showToastMessage("Phone number saved");
+        if (isNewCustomer) {
+          showToastMessage("Phone number saved");
+        }
       } catch (e) {
         console.warn("Failed to auto-save phone:", e.message);
-        showToastMessage("Failed to save phone number");
+        if (isNewCustomer) {
+          showToastMessage("Failed to save phone number");
+        }
       }
     }, 1500); // Save after 1.5 seconds of inactivity
 
@@ -1096,12 +1229,18 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   // ---------- AUTO-SAVE EMAIL ADDRESS ----------
   useEffect(() => {
-    if (!form.partner_email || !form.partner_id || !odooAuth) return;
-    
+    if (!form.partner_id || !odooAuth) return;
+
     // Validate email
+    if (!form.partner_email || form.partner_email.trim() === "") {
+      setEmailError(null);
+      if (emailDebounceRef.current) clearTimeout(emailDebounceRef.current);
+      return;
+    }
+
     const emailValidationError = isEmail(form.partner_email);
     setEmailError(emailValidationError);
-    
+
     // Don't auto-save if validation fails
     if (emailValidationError) {
       if (emailDebounceRef.current) {
@@ -1109,18 +1248,22 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       }
       return;
     }
-    
+
     if (emailDebounceRef.current) {
       clearTimeout(emailDebounceRef.current);
     }
-    
+
     emailDebounceRef.current = setTimeout(async () => {
       try {
         await updateCustomer(odooAuth, form.partner_id, { email: form.partner_email });
-        showToastMessage("Email saved");
+        if (isNewCustomer) {
+          showToastMessage("Email saved");
+        }
       } catch (e) {
         console.warn("Failed to auto-save email:", e.message);
-        showToastMessage("Failed to save email");
+        if (isNewCustomer) {
+          showToastMessage("Failed to save email");
+        }
       }
     }, 1500); // Save after 1.5 seconds of inactivity
 
@@ -1201,17 +1344,32 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             const lineImgs = await fetchOrderLineImages(odooAuth, lineIds);
             if (cancelled) return;
             const photoMap = {};
+            const timeMap = {};
+            const checkinPhotoMap = {};
+            const checkinTimeMap = {};
             lineImgs.forEach((li) => {
-              if (li.checkout_tool_image) {
-                const idx = existingOrder.lines.findIndex(
-                  (l) => l.odoo_id === li.id
-                );
-                if (idx >= 0) {
+              const idx = existingOrder.lines.findIndex(
+                (l) => l.odoo_id === li.id
+              );
+              if (idx >= 0) {
+                if (li.checkout_tool_image) {
                   photoMap[idx] = base64ToDataUri(li.checkout_tool_image);
+                }
+                if (li.checkout_tool_image_timestamp) {
+                  timeMap[idx] = li.checkout_tool_image_timestamp;
+                }
+                if (li.checkin_tool_image) {
+                  checkinPhotoMap[idx] = base64ToDataUri(li.checkin_tool_image);
+                }
+                if (li.checkin_tool_image_timestamp) {
+                  checkinTimeMap[idx] = li.checkin_tool_image_timestamp;
                 }
               }
             });
             setToolPhotoUris(photoMap);
+            setToolPhotoTimestamps(timeMap);
+            setToolCheckinPhotoUris(checkinPhotoMap);
+            setToolCheckinPhotoTimestamps(checkinTimeMap);
           }
         } catch (e) {
           console.warn("Failed to load order images:", e.message);
@@ -1302,6 +1460,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const openCameraForIdProof = () => {
     openCamera((uri) => {
       setIdProofUri(uri);
+      setIdProofTimestamp(new Date().toLocaleString());
       setCheckoutIdProof(true);
       showToastMessage("ID Proof captured");
     });
@@ -1315,6 +1474,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       });
       if (!result.canceled && result.assets?.length > 0) {
         setIdProofUri(result.assets[0].uri);
+        setIdProofTimestamp(new Date().toLocaleString());
         setCheckoutIdProof(true);
         showToastMessage("ID Proof file attached");
       }
@@ -1331,6 +1491,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const openCameraForToolPhoto = (lineIdx) => {
     openCamera((uri) => {
       setToolPhotoUris((prev) => ({ ...prev, [lineIdx]: uri }));
+      setToolPhotoTimestamps((prev) => ({ ...prev, [lineIdx]: new Date().toLocaleString() }));
       updateLine(lineIdx, "checkout_tool_image", true);
       showToastMessage("Tool photo captured");
     });
@@ -1342,7 +1503,35 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       delete updated[lineIdx];
       return updated;
     });
+    setToolPhotoTimestamps((prev) => {
+      const updated = { ...prev };
+      delete updated[lineIdx];
+      return updated;
+    });
     updateLine(lineIdx, "checkout_tool_image", false);
+  };
+
+  const openCameraForCheckinToolPhoto = (lineIdx) => {
+    openCamera((uri) => {
+      setToolCheckinPhotoUris((prev) => ({ ...prev, [lineIdx]: uri }));
+      setToolCheckinPhotoTimestamps((prev) => ({ ...prev, [lineIdx]: new Date().toLocaleString() }));
+      updateLine(lineIdx, "checkin_tool_image", true);
+      showToastMessage("Check-in tool photo captured");
+    });
+  };
+
+  const removeCheckinToolPhoto = (lineIdx) => {
+    setToolCheckinPhotoUris((prev) => {
+      const updated = { ...prev };
+      delete updated[lineIdx];
+      return updated;
+    });
+    setToolCheckinPhotoTimestamps((prev) => {
+      const updated = { ...prev };
+      delete updated[lineIdx];
+      return updated;
+    });
+    updateLine(lineIdx, "checkin_tool_image", false);
   };
 
   // ---------- SIGNATURE PAD ----------
@@ -1378,6 +1567,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         } else if (id === 'checkin_customer') {
           setCheckinSignatureTime(now);
           setForm((p) => ({ ...p, checkin_signature_time: now }));
+        } else if (id === 'checkin_authority') {
+          setCheckinAuthoritySignatureTime(now);
+          setForm((p) => ({ ...p, checkin_authority_signature_time: now }));
         } else if (id === 'discount_auth') {
           setDiscountAuthSignatureTime(now);
           setForm((p) => ({ ...p, discount_auth_signature_time: now }));
@@ -1527,6 +1719,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     if (afterCheckout) tabs.push({ key: "checkout_details", label: "Check-Out" });
     if (afterCheckin) tabs.push({ key: "checkin_details", label: "Check-In" });
     if (parseFloat(form.discount_amount) > 0) tabs.push({ key: "discount_details", label: "Discount" });
+    if (afterCheckout) tabs.push({ key: "tool_photos", label: "Tool Photos" });
     tabs.push({ key: "notes", label: "Notes" });
     return tabs;
   };
@@ -1561,7 +1754,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 </View>
                 <View style={ciStyles.infoItem}>
                   <Text style={ciStyles.infoLabel}>Check-Out Date</Text>
-                  <Text style={[ciStyles.infoValue, { color: "#1565C0", fontWeight: "700" }]}>{today()}</Text>
+                  <Text style={[ciStyles.infoValue, { color: "#1565C0", fontWeight: "700" }]}>{new Date().toLocaleString()}</Text>
                 </View>
                 <View style={ciStyles.infoItem}>
                   <Text style={ciStyles.infoLabel}>Planned Check-In</Text>
@@ -1619,6 +1812,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   {toolPhotoUris[idx] ? (
                     <View style={styles.capturedImageWrap}>
                       <Image source={{ uri: toolPhotoUris[idx] }} style={styles.capturedImage} />
+                      {toolPhotoTimestamps[idx] && <Text style={styles.photoTimestamp}>{toolPhotoTimestamps[idx]}</Text>}
                       <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeToolPhoto(idx)}>
                         <Text style={styles.photoRemoveBtnText}>X</Text>
                       </TouchableOpacity>
@@ -1663,10 +1857,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             </View>
 
             {/* ID Proof Section */}
-            <Text style={ciStyles.sectionTitle}>ID PROOF (REQUIRED)</Text>
+            <Text style={ciStyles.sectionTitle}>ID PROOF <Text style={{ color: "#F44336" }}>*</Text></Text>
             {idProofUri ? (
               <View style={styles.capturedImageWrap}>
                 <Image source={{ uri: idProofUri }} style={styles.capturedIdProof} />
+                {idProofTimestamp && <Text style={styles.photoTimestamp}>{idProofTimestamp}</Text>}
                 <TouchableOpacity style={styles.photoRemoveBtn} onPress={removeIdProof}>
                   <Text style={styles.photoRemoveBtnText}>X</Text>
                 </TouchableOpacity>
@@ -1685,10 +1880,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             )}
 
             {/* Customer Signature */}
-            <Text style={ciStyles.sectionTitle}>CUSTOMER SIGNATURE</Text>
+            <Text style={ciStyles.sectionTitle}>CUSTOMER SIGNATURE <Text style={{ color: "#F44336" }}>*</Text></Text>
             {checkoutSignatureUri ? (
               <View style={styles.capturedImageWrap}>
                 <Image source={{ uri: checkoutSignatureUri }} style={styles.capturedSignature} />
+                {checkoutSignatureTime && <Text style={styles.photoTimestamp}>Signed: {new Date(checkoutSignatureTime).toLocaleString()}</Text>}
                 <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeSignature(setCheckoutSignatureUri, setCheckoutSignature)}>
                   <Text style={styles.photoRemoveBtnText}>X</Text>
                 </TouchableOpacity>
@@ -1753,7 +1949,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 </View>
                 <View style={ciStyles.infoItem}>
                   <Text style={ciStyles.infoLabel}>Check-In</Text>
-                  <Text style={[ciStyles.infoValue, { color: "#4CAF50", fontWeight: "700" }]}>{today()}</Text>
+                  <Text style={[ciStyles.infoValue, { color: "#4CAF50", fontWeight: "700" }]}>{new Date().toLocaleString()}</Text>
                 </View>
               </View>
               {/* Duration display matching Odoo */}
@@ -1832,6 +2028,25 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   {renderConditionChips(line.checkin_condition, (v) => updateLine(idx, "checkin_condition", v))}
                 </View>
 
+                {/* Check-in Tool Photo */}
+                <View style={ciStyles.fieldBlock}>
+                  <Text style={ciStyles.fieldLabel}>Check-in Tool Photo</Text>
+                  {toolCheckinPhotoUris[idx] ? (
+                    <View style={styles.capturedImageWrap}>
+                      <Image source={{ uri: toolCheckinPhotoUris[idx] }} style={styles.capturedImage} />
+                      {toolCheckinPhotoTimestamps[idx] && <Text style={styles.photoTimestamp}>{toolCheckinPhotoTimestamps[idx]}</Text>}
+                      <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeCheckinToolPhoto(idx)}>
+                        <Text style={styles.photoRemoveBtnText}>X</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={coStyles.captureBtn} onPress={() => openCameraForCheckinToolPhoto(idx)}>
+                      <Text style={{ fontSize: 22, marginBottom: 2 }}>{"\uD83D\uDCF7"}</Text>
+                      <Text style={coStyles.captureBtnText}>Capture Check-in Tool Photo</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 {/* Late Fee Section */}
                 <View style={ciStyles.lateFeeSectionCard}>
                   <Text style={ciStyles.lateFeeTitle}>Late Fee</Text>
@@ -1903,10 +2118,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             </View>
 
             {/* Customer Signature */}
-            <Text style={ciStyles.sectionTitle}>CUSTOMER SIGNATURE</Text>
+            <Text style={ciStyles.sectionTitle}>CUSTOMER SIGNATURE <Text style={{ color: "#F44336" }}>*</Text></Text>
             {checkinSignatureUri ? (
               <View style={styles.capturedImageWrap}>
                 <Image source={{ uri: checkinSignatureUri }} style={styles.capturedSignature} />
+                {checkinSignatureTime && <Text style={styles.photoTimestamp}>Signed: {new Date(checkinSignatureTime).toLocaleString()}</Text>}
                 <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeSignature(setCheckinSignatureUri, setCheckinSignature)}>
                   <Text style={styles.photoRemoveBtnText}>X</Text>
                 </TouchableOpacity>
@@ -1922,9 +2138,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             )}
 
             {/* Authority Signature */}
-            <Text style={ciStyles.sectionTitle}>AUTHORITY SIGNATURE</Text>
+            <Text style={ciStyles.sectionTitle}>AUTHORITY SIGNATURE <Text style={{ color: "#F44336" }}>*</Text></Text>
             <View style={{ marginBottom: 10 }}>
-              <Text style={ciStyles.fieldLabel}>Signer Name</Text>
+              <Text style={ciStyles.fieldLabel}>Signer Name <Text style={{ color: "#F44336" }}>*</Text></Text>
               <RNTextInput
                 style={ciStyles.editableInput}
                 placeholder="Authority name"
@@ -1935,6 +2151,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             {checkinAuthoritySignatureUri ? (
               <View style={styles.capturedImageWrap}>
                 <Image source={{ uri: checkinAuthoritySignatureUri }} style={styles.capturedSignature} />
+                {checkinAuthoritySignatureTime && <Text style={styles.photoTimestamp}>Signed: {new Date(checkinAuthoritySignatureTime).toLocaleString()}</Text>}
                 <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeSignature(setCheckinAuthoritySignatureUri, setCheckinAuthoritySignature)}>
                   <Text style={styles.photoRemoveBtnText}>X</Text>
                 </TouchableOpacity>
@@ -2166,6 +2383,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 {discountAuthSignatureUri ? (
                   <View style={styles.capturedImageWrap}>
                     <Image source={{ uri: discountAuthSignatureUri }} style={styles.capturedSignature} />
+                    {discountAuthSignatureTime && <Text style={styles.photoTimestamp}>Signed: {new Date(discountAuthSignatureTime).toLocaleString()}</Text>}
                     <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => setDiscountAuthSignatureUri(null)}>
                       <Text style={styles.photoRemoveBtnText}>X</Text>
                     </TouchableOpacity>
@@ -2185,6 +2403,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 {discountAuthPhotoUri ? (
                   <View style={styles.capturedImageWrap}>
                     <Image source={{ uri: discountAuthPhotoUri }} style={styles.capturedImage} />
+                    {discountAuthPhotoTime && <Text style={styles.photoTimestamp}>Captured: {discountAuthPhotoTime}</Text>}
                     <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => setDiscountAuthPhotoUri(null)}>
                       <Text style={styles.photoRemoveBtnText}>X</Text>
                     </TouchableOpacity>
@@ -2193,7 +2412,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   <View style={{ flexDirection: "row", marginBottom: 16 }}>
                     <TouchableOpacity
                       style={{ flex: 1, borderWidth: 1.5, borderColor: "#FF9800", borderRadius: 8, paddingVertical: 14, alignItems: "center", backgroundColor: "#FFF8E1", marginRight: 8 }}
-                      onPress={() => openCamera((uri) => setDiscountAuthPhotoUri(uri))}
+                      onPress={() => openCamera((uri) => {
+                        setDiscountAuthPhotoUri(uri);
+                        setDiscountAuthPhotoTime(new Date().toLocaleString());
+                      })}
                     >
                       <Text style={{ fontSize: 18 }}>&#128247;</Text>
                       <Text style={{ color: "#FF9800", fontWeight: "600", marginTop: 2, fontSize: 13 }}>Camera</Text>
@@ -2203,7 +2425,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       onPress={async () => {
                         try {
                           const res = await DocumentPicker.getDocumentAsync({ type: "image/*" });
-                          if (!res.canceled && res.assets?.[0]) setDiscountAuthPhotoUri(res.assets[0].uri);
+                          if (!res.canceled && res.assets?.[0]) {
+                            setDiscountAuthPhotoUri(res.assets[0].uri);
+                            setDiscountAuthPhotoTime(new Date().toLocaleString());
+                          }
                         } catch (_) { }
                       }}
                     >
@@ -2486,15 +2711,68 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       </Text>
                     </TouchableOpacity>
                   ))}
+                  {/* Always offer Create New option at the bottom if enough chars typed */}
+                  {form.partner_name.trim().length > 2 && (
+                    <TouchableOpacity
+                      onPress={ensurePartnerId}
+                      style={[styles.dropdownItem, { backgroundColor: "#f0f7ff", borderTopWidth: 1, borderTopColor: "#d0e0ff" }]}
+                    >
+                      <Text style={[styles.dropdownItemName, { color: "#1565C0" }]}>+ Create New "{form.partner_name}"</Text>
+                      <Text style={styles.dropdownItemSub}>Create a new entry with this name</Text>
+                    </TouchableOpacity>
+                  )}
                 </ScrollView>
               )}
               {showCustomerDropdown && form.partner_name.trim().length > 0 && filteredCustomers.length === 0 && (
                 <View style={styles.dropdown}>
                   <Text style={styles.dropdownEmpty}>No customers found</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowCustomerDropdown(false);
+                      ensurePartnerId();
+                    }}
+                    style={{
+                      backgroundColor: "#E3F2FD",
+                      padding: 10,
+                      borderRadius: 6,
+                      alignItems: "center",
+                      marginTop: 5,
+                      borderWidth: 1,
+                      borderColor: "#1565C0"
+                    }}
+                  >
+                    <Text style={{ color: "#1565C0", fontWeight: "700", fontSize: 13 }}>+ Create "{form.partner_name}"</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
 
+            {/* FORCE CREATE BUTTON */}
+            {state === "draft" && !form.partner_id && form.partner_name.trim().length > 2 && (
+              <TouchableOpacity
+                onPress={ensurePartnerId}
+                style={{
+                  backgroundColor: "#2196F3",
+                  borderRadius: 8,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  marginTop: 4,
+                  marginBottom: 12,
+                  elevation: 4,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={{ fontSize: 18, color: "#fff", marginRight: 8 }}>{"\uD83D\uDC64"}</Text>
+                  <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
+                    CREATE NEW CUSTOMER
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
             <View style={styles.row2Col}>
               <View style={styles.colHalf}>
                 <TextInput
@@ -2542,11 +2820,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               <View style={styles.row2Col}>
                 <View style={styles.colHalf}>
                   <Text style={styles.infoLabel}>Actual Check-Out</Text>
-                  <Text style={[styles.infoValue, { marginTop: 2 }]}>{form.date_checkout || "-"}</Text>
+                  <Text style={[styles.infoValue, { marginTop: 2, color: "#1565C0" }]}>{form.date_checkout || "-"}</Text>
                 </View>
                 <View style={styles.colHalf}>
                   <Text style={styles.infoLabel}>Actual Check-In</Text>
-                  <Text style={[styles.infoValue, { marginTop: 2 }]}>{form.date_checkin || "-"}</Text>
+                  <Text style={[styles.infoValue, { marginTop: 2, color: "#4CAF50" }]}>{form.date_checkin || "-"}</Text>
                 </View>
               </View>
               <View style={[styles.infoRow, { marginTop: 8 }]}>
@@ -2747,21 +3025,48 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={styles.lineTotalText}>${calcLineTotal(line).toFixed(2)}</Text>
                     </View>
                   </View>
-
-                  {/* Conditions */}
-                  {state !== "draft" && (line.checkout_condition || line.checkin_condition) && (
-                    <View style={styles.conditionDisplayRow}>
-                      {line.checkout_condition ? <Text style={styles.conditionDisplayText}>Out: {line.checkout_condition}</Text> : null}
-                      {line.checkin_condition ? <Text style={styles.conditionDisplayText}>In: {line.checkin_condition}</Text> : null}
+                  {state !== "draft" && state !== "confirmed" && (parseFloat(line.late_fee_amount || 0) > 0 || parseFloat(line.damage_charge || 0) > 0) && (
+                    <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#f0f0f0" }}>
+                      {parseFloat(line.late_fee_amount || 0) > 0 && (
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                          <Text style={{ fontSize: 12, color: "#E65100" }}>Late Fee ({line.extra_days || 0} extra days)</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: "#E65100" }}>${parseFloat(line.late_fee_amount).toFixed(2)}</Text>
+                        </View>
+                      )}
+                      {parseFloat(line.damage_charge || 0) > 0 && (
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <Text style={{ fontSize: 12, color: "#D32F2F" }}>Damage Charge</Text>
+                            {line.damage_note ? <Text style={{ fontSize: 11, color: "#888", fontStyle: "italic" }}>{line.damage_note}</Text> : null}
+                          </View>
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: "#D32F2F" }}>${parseFloat(line.damage_charge).toFixed(2)}</Text>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>
               ))}
 
-              {isEditable && (
+              {isEditable && form.partner_id && (
                 <TouchableOpacity onPress={addLine} style={styles.addLineBtn}>
                   <Text style={styles.addLineBtnText}>+ Add a line</Text>
                 </TouchableOpacity>
+              )}
+
+              {isEditable && !form.partner_id && (
+                <View style={{
+                  backgroundColor: "#FFF9C4",
+                  padding: 12,
+                  borderRadius: 8,
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: "#FBC02D",
+                  alignItems: "center"
+                }}>
+                  <Text style={{ color: "#827717", fontSize: 13, fontWeight: "600" }}>
+                    Please select or create a customer to add tools
+                  </Text>
+                </View>
               )}
 
               {errors.lines && <Text style={styles.errorText}>{errors.lines}</Text>}
@@ -2774,29 +3079,31 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   </View>
                   {calcLateFees() > 0 && (
                     <View style={styles.lineTotalRow}>
-                      <Text style={styles.lineTotalLabel}>Late Fees</Text>
-                      <Text style={styles.lineTotalValue}>${calcLateFees().toFixed(2)}</Text>
+                      <Text style={[styles.lineTotalLabel, { color: "#F44336" }]}>Late Fees</Text>
+                      <Text style={[styles.lineTotalValue, { color: "#F44336", fontWeight: "700" }]}>${calcLateFees().toFixed(2)}</Text>
                     </View>
                   )}
                   {calcDamageCharges() > 0 && (
                     <View style={styles.lineTotalRow}>
-                      <Text style={styles.lineTotalLabel}>Damage Charges</Text>
-                      <Text style={styles.lineTotalValue}>${calcDamageCharges().toFixed(2)}</Text>
+                      <Text style={[styles.lineTotalLabel, { color: "#F44336" }]}>Damage Charges</Text>
+                      <Text style={[styles.lineTotalValue, { color: "#F44336", fontWeight: "700" }]}>${calcDamageCharges().toFixed(2)}</Text>
                     </View>
                   )}
                   {parseFloat(form.discount_amount) > 0 && (
                     <View style={styles.lineTotalRow}>
-                      <Text style={styles.lineTotalLabel}>Discount</Text>
-                      <Text style={styles.lineTotalValue}>-${parseFloat(form.discount_amount).toFixed(2)}</Text>
+                      <Text style={[styles.lineTotalLabel, { color: "#4CAF50" }]}>Discount</Text>
+                      <Text style={[styles.lineTotalValue, { color: "#4CAF50", fontWeight: "700" }]}>-${parseFloat(form.discount_amount).toFixed(2)}</Text>
                     </View>
                   )}
                   {parseFloat(form.advance_amount) > 0 && (
                     <View style={styles.lineTotalRow}>
-                      <Text style={styles.lineTotalLabel}>Advance</Text>
-                      <Text style={[styles.lineTotalValue, { color: "#4CAF50" }]}>-${parseFloat(form.advance_amount).toFixed(2)}</Text>
+                      <Text style={styles.lineTotalLabel}>Advance Collected</Text>
+                      <Text style={[styles.lineTotalValue, { color: "#4CAF50" }]}>
+                        {form.advance_returned ? "" : "-"}${parseFloat(form.advance_amount).toFixed(2)}{form.advance_returned ? "(returned)" : ""}
+                      </Text>
                     </View>
                   )}
-                  <View style={[styles.lineTotalRow, styles.grandTotalRow]}>
+                  <View style={[styles.lineTotalRow, styles.grandTotalRow, { borderTopWidth: 2, borderTopColor: "#333", marginTop: 8, paddingTop: 8 }]}>
                     <Text style={styles.grandTotalLabel}>TOTAL</Text>
                     <Text style={styles.grandTotalValue}>${calcTotal().toFixed(2)}</Text>
                   </View>
@@ -2841,34 +3148,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 </View>
               </View>
 
-              {/* Tool Conditions */}
-              <Text style={styles.detailSectionTitle}>Tool Conditions at Check-Out</Text>
-              {lines.map((line, idx) => (
-                <View key={line.id} style={styles.detailToolCard}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#333", flex: 1 }}>{line.tool_name || "Tool " + (idx + 1)}</Text>
-                    <View style={[styles.conditionBadge, {
-                      backgroundColor: ["excellent", "good"].includes(line.checkout_condition) ? "#E8F5E9" :
-                        line.checkout_condition === "fair" ? "#FFF8E1" : "#FFEBEE"
-                    }]}>
-                      <Text style={[styles.conditionBadgeText, {
-                        color: ["excellent", "good"].includes(line.checkout_condition) ? "#2E7D32" :
-                          line.checkout_condition === "fair" ? "#F57F17" : "#C62828"
-                      }]}>{(line.checkout_condition || "N/A").toUpperCase()}</Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                    <Text style={{ fontSize: 12, color: "#888" }}>S/N: {line.serial_number || "-"}</Text>
-                    <Text style={{ fontSize: 12, color: "#888" }}>Price: ${line.unit_price}/Day x {line.planned_duration || 1} = ${((parseFloat(line.unit_price) || 0) * (parseFloat(line.planned_duration) || 1)).toFixed(2)}</Text>
-                  </View>
-                  {toolPhotoUris[idx] && (
-                    <TouchableOpacity onPress={() => setPreviewImageUri(toolPhotoUris[idx])}>
-                      <Image source={{ uri: toolPhotoUris[idx] }} style={{ width: "100%", height: 150, borderRadius: 8, marginTop: 8, resizeMode: "contain", backgroundColor: "#f5f5f5" }} />
-                      <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
+              {/* Render Signatures & ID proofs here instead of tool info */}
 
               {/* Customer Signature */}
               <Text style={styles.detailSectionTitle}>Customer Signature</Text>
@@ -2876,6 +3156,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={() => setPreviewImageUri(checkoutSignatureUri)}>
                   <View style={styles.detailImageWrap}>
                     <Image source={{ uri: checkoutSignatureUri }} style={{ width: "100%", height: 140, resizeMode: "contain", backgroundColor: "#fff" }} />
+                    {checkoutSignatureTime && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Signed: {new Date(checkoutSignatureTime).toLocaleString()}</Text>}
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>
@@ -2889,6 +3170,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={() => setPreviewImageUri(idProofUri)}>
                   <View style={styles.detailImageWrap}>
                     <Image source={{ uri: idProofUri }} style={{ width: "100%", height: 220, resizeMode: "contain" }} />
+                    {idProofTimestamp && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Captured: {idProofTimestamp}</Text>}
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>
@@ -2920,34 +3202,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 )}
               </View>
 
-              {/* Tool Conditions Comparison */}
-              <Text style={styles.detailSectionTitle}>Tool Conditions (Out vs In)</Text>
-              {lines.map((line, idx) => (
-                <View key={line.id} style={styles.detailToolCard}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#333", marginBottom: 6 }}>{line.tool_name || "Tool " + (idx + 1)}</Text>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 11, color: "#888" }}>Out Condition</Text>
-                      <View style={[styles.conditionBadge, { alignSelf: "flex-start", marginTop: 2, backgroundColor: ["excellent", "good"].includes(line.checkout_condition) ? "#E8F5E9" : line.checkout_condition === "fair" ? "#FFF8E1" : "#FFEBEE" }]}>
-                        <Text style={[styles.conditionBadgeText, { color: ["excellent", "good"].includes(line.checkout_condition) ? "#2E7D32" : line.checkout_condition === "fair" ? "#F57F17" : "#C62828" }]}>{(line.checkout_condition || "N/A").toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flex: 1, alignItems: "flex-end" }}>
-                      <Text style={{ fontSize: 11, color: "#888" }}>In Condition</Text>
-                      <View style={[styles.conditionBadge, { alignSelf: "flex-end", marginTop: 2, backgroundColor: ["excellent", "good"].includes(line.checkin_condition) ? "#E8F5E9" : line.checkin_condition === "fair" ? "#FFF8E1" : "#FFEBEE" }]}>
-                        <Text style={[styles.conditionBadgeText, { color: ["excellent", "good"].includes(line.checkin_condition) ? "#2E7D32" : line.checkin_condition === "fair" ? "#F57F17" : "#C62828" }]}>{(line.checkin_condition || "N/A").toUpperCase()}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  {line.damage_note ? (
-                    <Text style={{ fontSize: 12, color: "#C62828", marginTop: 4 }}>Damage: {line.damage_note}</Text>
-                  ) : null}
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
-                    {parseFloat(line.late_fee_amount) > 0 && <Text style={{ fontSize: 12, color: "#E65100" }}>Late Fee: ${parseFloat(line.late_fee_amount).toFixed(2)}</Text>}
-                    {parseFloat(line.damage_charge) > 0 && <Text style={{ fontSize: 12, color: "#C62828" }}>Damage Charge: ${parseFloat(line.damage_charge).toFixed(2)}</Text>}
-                  </View>
-                </View>
-              ))}
+              {/* Totals & Signatures only */}
 
               {/* Totals */}
               {(calcLateFees() > 0 || calcDamageCharges() > 0 || parseFloat(form.discount_amount) > 0) && (
@@ -2964,6 +3219,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={() => setPreviewImageUri(checkinSignatureUri)}>
                   <View style={styles.detailImageWrap}>
                     <Image source={{ uri: checkinSignatureUri }} style={{ width: "100%", height: 140, resizeMode: "contain", backgroundColor: "#fff" }} />
+                    {checkinSignatureTime && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Signed: {new Date(checkinSignatureTime).toLocaleString()}</Text>}
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>
@@ -2978,6 +3234,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={() => setPreviewImageUri(checkinAuthoritySignatureUri)}>
                   <View style={styles.detailImageWrap}>
                     <Image source={{ uri: checkinAuthoritySignatureUri }} style={{ width: "100%", height: 140, resizeMode: "contain", backgroundColor: "#fff" }} />
+                    {checkinAuthoritySignatureTime && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Signed: {new Date(checkinAuthoritySignatureTime).toLocaleString()}</Text>}
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>
@@ -3002,6 +3259,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                     <Text style={[styles.detailSmallValue, { color: "#F44336", fontWeight: "800" }]}>-${parseFloat(form.discount_amount).toFixed(2)}</Text>
                   </View>
                 </View>
+                <DetailItem label="Authorization Date" value={form.discount_auth_signature_time ? new Date(form.discount_auth_signature_time).toLocaleString() : ''} />
               </View>
 
               {/* Authorizer Photo */}
@@ -3010,6 +3268,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={() => setPreviewImageUri(discountAuthPhotoUri)}>
                   <View style={styles.detailImageWrap}>
                     <Image source={{ uri: discountAuthPhotoUri }} style={{ width: "100%", height: 220, resizeMode: "contain" }} />
+                    {discountAuthPhotoTime && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Captured: {discountAuthPhotoTime}</Text>}
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>
@@ -3023,6 +3282,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={() => setPreviewImageUri(discountAuthSignatureUri)}>
                   <View style={styles.detailImageWrap}>
                     <Image source={{ uri: discountAuthSignatureUri }} style={{ width: "100%", height: 140, resizeMode: "contain", backgroundColor: "#fff" }} />
+                    {discountAuthSignatureTime && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Signed: {new Date(discountAuthSignatureTime).toLocaleString()}</Text>}
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>
@@ -3059,6 +3319,83 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   </View>
                 );
               })}
+            </View>
+          )}
+
+          {/* ----- TAB: TOOL PHOTOS ----- */}
+          {activeTab === "tool_photos" && (
+            <View style={styles.tabContent}>
+              <View style={styles.detailInfoCard}>
+                <View style={styles.row2Col}>
+                  <View style={styles.colHalf}>
+                    <Text style={styles.detailSmallLabel}>Check-Out Date</Text>
+                    <Text style={styles.detailSmallValue}>{form.date_checkout || "-"}</Text>
+                  </View>
+                  <View style={styles.colHalf}>
+                    <Text style={styles.detailSmallLabel}>Check-In Date</Text>
+                    <Text style={styles.detailSmallValue}>{form.date_checkin || "-"}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.detailSectionTitle}>TOOL CONDITIONS & PHOTOS</Text>
+              {lines.map((line, idx) => (
+                <View key={line.id} style={[styles.detailToolCard, { paddingBottom: 15 }]}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "700", color: "#2c3e50" }}>{line.tool_name || "Tool " + (idx + 1)}</Text>
+                      <Text style={{ fontSize: 12, color: "#7f8c8d", marginTop: 2 }}>S/N: {line.serial_number || "-"}</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: "row", gap: 15 }}>
+                    {/* Check-Out Side */}
+                    <View style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 10, borderRadius: 8, borderLeftWidth: 4, borderLeftColor: "#2196F3" }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#2196F3", marginBottom: 6, letterSpacing: 0.5 }}>AT CHECK-OUT</Text>
+                      <View style={[styles.conditionBadge, { alignSelf: "flex-start", marginBottom: 8, backgroundColor: ["excellent", "good"].includes(line.checkout_condition) ? "#E8F5E9" : line.checkout_condition === "fair" ? "#FFF8E1" : "#FFEBEE" }]}>
+                        <Text style={[styles.conditionBadgeText, { color: ["excellent", "good"].includes(line.checkout_condition) ? "#2E7D32" : line.checkout_condition === "fair" ? "#F57F17" : "#C62828" }]}>{(line.checkout_condition || "N/A").toUpperCase()}</Text>
+                      </View>
+                      <View style={{ width: "100%", height: 220, backgroundColor: "#fff", borderRadius: 8, overflow: "hidden", borderWidth: 1, borderColor: "#e0e0e0" }}>
+                        {toolPhotoUris[idx] ? (
+                          <TouchableOpacity onPress={() => setPreviewImageUri(toolPhotoUris[idx])} style={{ flex: 1 }}>
+                            <Image source={{ uri: toolPhotoUris[idx] }} style={{ width: "100%", height: "100%", resizeMode: "contain" }} />
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 10, color: "#bdc3c7" }}>No Photo</Text>
+                          </View>
+                        )}
+                      </View>
+                      {toolPhotoTimestamps[idx] && <Text style={{ fontSize: 9, color: "#95a5a6", marginTop: 6, textAlign: "center" }}>{toolPhotoTimestamps[idx]}</Text>}
+                    </View>
+
+                    {/* Check-In Side */}
+                    {(state === "checked_in" || state === "done" || state === "invoiced") && (
+                      <View style={{ flex: 1, backgroundColor: "#f8f9fa", padding: 10, borderRadius: 8, borderLeftWidth: 4, borderLeftColor: "#4CAF50" }}>
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: "#4CAF50", marginBottom: 6, letterSpacing: 0.5 }}>AT CHECK-IN</Text>
+                        <View style={[styles.conditionBadge, { alignSelf: "flex-start", marginBottom: 8, backgroundColor: ["excellent", "good"].includes(line.checkin_condition) ? "#E8F5E9" : line.checkin_condition === "fair" ? "#FFF8E1" : "#FFEBEE" }]}>
+                          <Text style={[styles.conditionBadgeText, { color: ["excellent", "good"].includes(line.checkin_condition) ? "#2E7D32" : line.checkin_condition === "fair" ? "#F57F17" : "#C62828" }]}>{(line.checkin_condition || "N/A").toUpperCase()}</Text>
+                        </View>
+                        <View style={{ width: "100%", height: 220, backgroundColor: "#fff", borderRadius: 8, overflow: "hidden", borderWidth: 1, borderColor: "#e0e0e0" }}>
+                          {toolCheckinPhotoUris[idx] ? (
+                            <TouchableOpacity onPress={() => setPreviewImageUri(toolCheckinPhotoUris[idx])} style={{ flex: 1 }}>
+                              <Image source={{ uri: toolCheckinPhotoUris[idx] }} style={{ width: "100%", height: "100%", resizeMode: "contain" }} />
+                            </TouchableOpacity>
+                          ) : (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ fontSize: 10, color: "#bdc3c7" }}>No Check-in Photo</Text>
+                            </View>
+                          )}
+                        </View>
+                        {toolCheckinPhotoTimestamps[idx] && <Text style={{ fontSize: 9, color: "#95a5a6", marginTop: 6, textAlign: "center" }}>{toolCheckinPhotoTimestamps[idx]}</Text>}
+                        {line.damage_note ? (
+                          <Text style={{ fontSize: 9, color: "#e74c3c", marginTop: 8, fontWeight: "600" }}>Damage: {line.damage_note}</Text>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
             </View>
           )}
 
@@ -3169,7 +3506,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <View style={{ marginTop: 12 }}>
                   <Text style={{ fontSize: 12, color: '#666' }}>Ink Color</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-                    {['#000','#1E88E5','#E53935','#43A047','#8E24AA','#000000','#37474F'].map((c) => (
+                    {['#000', '#1E88E5', '#E53935', '#43A047', '#8E24AA', '#000000', '#37474F'].map((c) => (
                       <TouchableOpacity key={c} onPress={() => { setSignStrokeColor(c); setSignModeEraser(false); }} style={[styles.colorDot, { backgroundColor: c, borderWidth: signStrokeColor === c ? 2 : 0 }]} />
                     ))}
                   </View>
@@ -3323,7 +3660,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 };
 
@@ -3835,6 +4172,7 @@ const styles = StyleSheet.create({
   capturedSignature: { width: "100%", height: 160, borderRadius: 8, resizeMode: "contain", backgroundColor: "#fff" },
   photoRemoveBtn: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   photoRemoveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  photoTimestamp: { fontSize: 10, color: "#999", textAlign: "center", paddingVertical: 4 },
 
   // Discount modal
   discountTypeBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1.5, borderColor: "#ccc", alignItems: "center", backgroundColor: "#f5f5f5" },
