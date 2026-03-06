@@ -27,7 +27,7 @@ import * as Sharing from "expo-sharing";
 import * as Print from "expo-print";
 import SignaturePad from "@components/common/SignaturePad/SignaturePad";
 import CameraCapture from "@components/common/CameraCapture/CameraCapture";
-import { updateOrderValues, updateOrderLineValues, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer } from "@api/services/odooService";
+import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer } from "@api/services/odooService";
 import { isEmail, isPhone } from "@utils/validation/validation";
 
 const PERIOD_TYPES = [
@@ -251,6 +251,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       partner_email: "",
       partner_id: null,
     }));
+    setLines([]);
     setIsNewCustomer(false);
     setShowCustomerDropdown(false);
   };
@@ -472,6 +473,16 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           const newId = await addOrder(odooAuth, orderValues, lineValues);
           setOdooOrderId(newId);
           await storeConfirmOrder(odooAuth, newId);
+          // Refresh order data to get line odoo_ids (needed for checkout photo saving)
+          try {
+            const fresh = await fetchOrderDataById(odooAuth, newId);
+            if (fresh) {
+              setLines(fresh.lines || []);
+              setForm((prev) => ({ ...prev, name: fresh.name || prev.name }));
+            }
+          } catch (e) {
+            console.warn("Failed to refresh after confirm:", e.message);
+          }
           showToastMessage("Order confirmed");
           return;
         }
@@ -527,6 +538,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     (async () => {
       try {
         if (odooOrderId && odooAuth) {
+          // 1. Run checkout action FIRST (changes state to checked_out)
+          await storeCheckoutOrder(odooAuth, odooOrderId);
+
+          // 2. Save order-level images (signature + ID proof) AFTER checkout
           const imageVals = {};
           const sigB64 = await uriToBase64(checkoutSignatureUri);
           if (sigB64) imageVals.customer_signature = sigB64;
@@ -535,24 +550,23 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           if (Object.keys(imageVals).length > 0) {
             await updateOrderValues(odooAuth, odooOrderId, imageVals);
           }
+
+          // 3. Save line-level photos & conditions AFTER checkout
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const lineOdooId = line.odoo_id;
             const photoUri = toolPhotoUris[i];
-            const timestamp = toolPhotoTimestamps[i];
             if (lineOdooId) {
               const updateVals = { checkout_condition: line.checkout_condition };
               if (photoUri) {
                 const photoB64 = await uriToBase64(photoUri);
                 if (photoB64) {
                   updateVals.checkout_tool_image = photoB64;
-                  if (timestamp) updateVals.checkout_tool_image_timestamp = timestamp;
                 }
               }
               await updateOrderLineValues(odooAuth, lineOdooId, updateVals);
             }
           }
-          await storeCheckoutOrder(odooAuth, odooOrderId);
         }
         showToastMessage("Check-out completed");
       } catch (e) {
@@ -673,7 +687,13 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             const updateVals = {
               checkin_condition: line.checkin_condition,
             };
-            // Tool photos removed from check-in per user request
+            const checkinPhotoUri = toolCheckinPhotoUris[i];
+            if (checkinPhotoUri) {
+              const photoB64 = await uriToBase64(checkinPhotoUri);
+              if (photoB64) {
+                updateVals.checkin_tool_image = photoB64;
+              }
+            }
             await updateOrderLineValues(odooAuth, lineOdooId, updateVals);
           }
         }
@@ -788,58 +808,59 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </tr>`;
     }).join("");
 
+    const isA5 = invoicePaperSize === "a5";
+    const sigW = isA5 ? 100 : 220;
+    const sigH = isA5 ? 40 : 90;
+    const sigFontSize = isA5 ? "8px" : "11px";
+
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
     <style>
-      /* Respect user-selected paper size (A4 or A5). Some printers or print dialogs may still override this. */
-      @page { size: ${invoicePaperSize === "a5" ? "A5" : "A4"} portrait; margin: 12mm; }
-      body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #333; font-size: 12px; }
-      h2.title { text-align: center; color: #2c3e50; margin: 0 0 4px 0; }
-      h4.sub { text-align: center; color: #888; margin: 0 0 16px 0; }
-      .row { display: flex; gap: 20px; margin-bottom: 12px; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      @page { size: ${isA5 ? "148mm 210mm" : "A4"} portrait; margin: ${isA5 ? "6mm" : "12mm"}; }
+      body { font-family: Arial, Helvetica, sans-serif; padding: ${isA5 ? "6px" : "24px"}; color: #333; font-size: ${isA5 ? "8.5px" : "12px"}; line-height: ${isA5 ? "1.3" : "1.4"}; }
+      h2.title { text-align: center; color: #2c3e50; margin: 0 0 ${isA5 ? "2px" : "4px"} 0; font-size: ${isA5 ? "13px" : "18px"}; }
+      h4.sub { text-align: center; color: #888; margin: 0 0 ${isA5 ? "5px" : "16px"} 0; font-size: ${isA5 ? "9px" : "14px"}; }
+      .row { display: flex; gap: ${isA5 ? "8px" : "20px"}; margin-bottom: ${isA5 ? "5px" : "12px"}; }
       .col { flex: 1; }
-      .badge { text-align: center; margin-bottom: 12px; }
-      .badge span { background: #714B67; color: #fff; padding: 6px 18px; border-radius: 4px; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
-      table.details { width: 100%; margin-bottom: 12px; border-collapse: collapse; }
-      table.details td { padding: 4px 8px; font-size: 12px; }
+      .badge { text-align: center; margin-bottom: ${isA5 ? "5px" : "12px"}; }
+      .badge span { background: #714B67; color: #fff; padding: ${isA5 ? "2px 10px" : "6px 18px"}; border-radius: 4px; font-size: ${isA5 ? "8px" : "13px"}; font-weight: 700; letter-spacing: 1px; }
+      table.details { width: 100%; margin-bottom: ${isA5 ? "5px" : "12px"}; border-collapse: collapse; }
+      table.details td { padding: ${isA5 ? "1.5px 4px" : "4px 8px"}; font-size: ${isA5 ? "8px" : "12px"}; }
       table.details td strong { color: #333; }
-      h5 { margin: 15px 0 6px; color: #333; }
-      table.tools { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px; }
-      table.tools th { background: #e9ecef; color: #333; padding: 6px 8px; text-align: left; font-size: 10px; border: 1px solid #dee2e6; }
-      table.tools td { padding: 5px 8px; border: 1px solid #dee2e6; }
+      h5 { margin: ${isA5 ? "5px 0 3px" : "15px 0 6px"}; color: #333; font-size: ${isA5 ? "9.5px" : "14px"}; }
+      table.tools { width: 100%; border-collapse: collapse; margin-bottom: ${isA5 ? "5px" : "14px"}; font-size: ${isA5 ? "7.5px" : "11px"}; }
+      table.tools th { background: #e9ecef; color: #333; padding: ${isA5 ? "2.5px 3px" : "6px 8px"}; text-align: left; font-size: ${isA5 ? "7px" : "10px"}; border: 1px solid #dee2e6; }
+      table.tools td { padding: ${isA5 ? "2px 3px" : "5px 8px"}; border: 1px solid #dee2e6; }
       .text-end { text-align: right; }
-      table.totals { width: 50%; margin-left: auto; border-collapse: collapse; }
-      table.totals td { padding: 4px 8px; font-size: 12px; }
+      table.totals { width: ${isA5 ? "55%" : "50%"}; margin-left: auto; border-collapse: collapse; }
+      table.totals td { padding: ${isA5 ? "2px 4px" : "4px 8px"}; font-size: ${isA5 ? "8.5px" : "12px"}; }
       .grand-row { border-top: 2px solid #000; }
-      .grand-row td { font-size: 14px; font-weight: 700; }
-      .late-banner { background: #fff3cd; border: 1px solid #ffc107; padding: 8px 12px; margin-bottom: 10px; border-radius: 4px; }
+      .grand-row td { font-size: ${isA5 ? "9.5px" : "14px"}; font-weight: 700; }
+      .late-banner { background: #fff3cd; border: 1px solid #ffc107; padding: ${isA5 ? "3px 6px" : "8px 12px"}; margin-bottom: ${isA5 ? "4px" : "10px"}; border-radius: 4px; font-size: ${isA5 ? "7.5px" : "12px"}; }
       .late-banner strong { color: #856404; }
       .late-banner span { color: #856404; }
-      .sig-row { display: flex; margin-top: 40px; }
+      .sig-row { display: flex; margin-top: ${isA5 ? "12px" : "40px"}; }
       .sig-col { flex: 1; text-align: center; }
-      .sig-col hr { border: none; border-top: 1px solid #333; width: 80%; margin: 0 auto 4px; }
-      .footer { margin-top: 20px; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }
+      .sig-col hr { border: none; border-top: 1px solid #333; width: 80%; margin: 0 auto ${isA5 ? "2px" : "4px"}; }
+      .footer { margin-top: ${isA5 ? "8px" : "20px"}; font-size: ${isA5 ? "6.5px" : "9px"}; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: ${isA5 ? "3px" : "6px"}; }
     </style></head><body>
 
     <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : "CHECKOUT INVOICE"}</h2>
     <h4 class="sub">${form.name || "New Order"}</h4>
 
-    <!-- Parties -->
     <div class="row">
       <div class="col">
         <strong>Rental Company:</strong><br/>
-        Tool Management<br/>
+        Tool Management
       </div>
       <div class="col">
         <strong>Customer:</strong><br/>
-        ${form.partner_name || "-"}<br/>
-        ${form.partner_phone ? "Phone: " + form.partner_phone + "<br/>" : ""}
-        ${form.partner_email ? "Email: " + form.partner_email : ""}
+        ${form.partner_name || "-"}${form.partner_phone ? "<br/>Ph: " + form.partner_phone : ""}${form.partner_email ? "<br/>" + form.partner_email : ""}
       </div>
     </div>
 
     ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
 
-    <!-- Rental Details -->
     <table class="details">
       <tr>
         <td><strong>Order Date:</strong></td>
@@ -867,7 +888,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       <tr>
         <td><strong>Planned Return:</strong></td>
         <td>${form.date_planned_checkin || "-"}</td>
-        <td><strong>Advance Collected:</strong></td>
+        <td><strong>Advance:</strong></td>
         <td>${cur}${advance.toFixed(2)}</td>
       </tr>`}
       <tr>
@@ -877,46 +898,43 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </tr>
     </table>
 
-    ${isCheckin && (existingOrder?.is_late || lateFees > 0) ? `<div class="late-banner"><strong>LATE RETURN</strong> <span>— This rental exceeded the planned return date.</span></div>` : ""}
+    ${isCheckin && (existingOrder?.is_late || lateFees > 0) ? `<div class="late-banner"><strong>LATE RETURN</strong> <span>— Exceeded planned return date.</span></div>` : ""}
 
-    <!-- Tools Table -->
     <h5>Tools / Equipment</h5>
     ${!isCheckin ? `<table class="tools">
       <thead><tr>
         <th>#</th><th>Tool</th><th>Serial No.</th><th>Condition</th>
-        <th class="text-end">Price/Day</th><th class="text-end">Duration (Days)</th><th class="text-end">Total</th>
+        <th class="text-end">Price/Day</th><th class="text-end">Days</th><th class="text-end">Total</th>
       </tr></thead>
       <tbody>${checkoutToolRows}</tbody>
     </table>` : `<table class="tools">
       <thead><tr>
-        <th>#</th><th>Tool</th><th>Serial No.</th><th>Out Condition</th><th>In Condition</th>
-        <th class="text-end">Price/Day</th><th class="text-end">Duration</th><th class="text-end">Extra Days</th>
-        <th class="text-end">Late Fee</th><th>Damage Note</th><th class="text-end">Damage Charge</th><th class="text-end">Discount</th>
+        <th>#</th><th>Tool</th><th>S/N</th><th>Out</th><th>In</th>
+        <th class="text-end">Price</th><th class="text-end">Days</th><th class="text-end">Extra</th>
+        <th class="text-end">Late Fee</th><th>Damage</th><th class="text-end">Dmg $</th><th class="text-end">Disc.</th>
       </tr></thead>
       <tbody>${checkinToolRows}</tbody>
     </table>`}
 
-    <!-- Totals -->
     <table class="totals">
       <tr><td><strong>Subtotal:</strong></td><td class="text-end">${cur}${subtotal.toFixed(2)}</td></tr>
       ${lateFees > 0 ? `<tr style="color:red;font-weight:bold"><td>Late Fees:</td><td class="text-end">${cur}${lateFees.toFixed(2)}</td></tr>` : ""}
-      ${damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage Charges:</td><td class="text-end">${cur}${damageCharges.toFixed(2)}</td></tr>` : ""}
+      ${damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage:</td><td class="text-end">${cur}${damageCharges.toFixed(2)}</td></tr>` : ""}
       ${discount > 0 ? `<tr style="color:green;font-weight:bold"><td>Discount:</td><td class="text-end">-${cur}${discount.toFixed(2)}</td></tr>` : ""}
       <tr class="grand-row"><td><strong>TOTAL:</strong></td><td class="text-end"><strong>${cur}${grandTotal.toFixed(2)}</strong></td></tr>
-      ${advance > 0 && !form.advance_returned ? `<tr><td>Advance Paid (-):</td><td class="text-end">-${cur}${advance.toFixed(2)}</td></tr>` : ""}
+      ${advance > 0 && !form.advance_returned ? `<tr><td>Advance (-):</td><td class="text-end">-${cur}${advance.toFixed(2)}</td></tr>` : ""}
       <tr class="grand-row" style="background-color:#f9f9f9"><td><strong>Amount Due:</strong></td><td class="text-end"><strong>${cur}${amountDue.toFixed(2)}</strong></td></tr>
     </table>
 
-    ${isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin-top:10px">
-      <tr><td><strong>Advance Collected:</strong></td><td class="text-end">${cur}${advance.toFixed(2)}</td></tr>
-      <tr><td><strong>Advance Returned:</strong></td><td class="text-end">${form.advance_returned ? "Yes" : "No"}</td></tr>
+    ${isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin-top:${isA5 ? "3px" : "10px"}">
+      <tr><td><strong>Advance:</strong></td><td class="text-end">${cur}${advance.toFixed(2)}</td></tr>
+      <tr><td><strong>Returned:</strong></td><td class="text-end">${form.advance_returned ? "Yes" : "No"}</td></tr>
     </table>` : ""}
 
     ${!isCheckin && advance > 0 ? `<table class="totals"><tr><td>Advance Collected:</td><td class="text-end">${cur}${advance.toFixed(2)}</td></tr></table>` : ""}
 
-    ${form.terms ? `<br/><h5>Terms &amp; Conditions</h5><div style="font-size:11px;color:#555">${form.terms}</div>` : ""}
+    ${form.terms ? `<h5>Terms &amp; Conditions</h5><div style="font-size:${isA5 ? "7px" : "11px"};color:#555">${form.terms}</div>` : ""}
 
-    <!-- Signatures -->
     <div class="sig-row">
       <div class="sig-col">
         ${(() => {
@@ -928,34 +946,34 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             ? new Date(form.checkout_signature_time).toLocaleString()
             : form.date_checkout || form.date_order || new Date().toLocaleString());
         if (sigImg) {
-          return `<img src="${sigImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Customer</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
+          return `<img src="${sigImg}" style="width:${sigW}px;height:${sigH}px;object-fit:contain;margin-bottom:2px;"/><div><strong>Customer</strong></div><div>${sigName}</div><div style="font-size:${sigFontSize};color:#666">${sigTime}</div>`;
         }
-        return `<hr/><div><strong>Customer Signature</strong></div><div>${sigName}</div><div style="font-size:11px;color:#666">${sigTime}</div>`;
+        return `<hr/><div><strong>Customer Signature</strong></div><div>${sigName}</div><div style="font-size:${sigFontSize};color:#666">${sigTime}</div>`;
       })()}
       </div>
       <div class="sig-col">
         ${(() => {
         const authImg = isCheckin ? assets.checkinAuthoritySignature : null;
-        const authName = isCheckin ? (form.responsible || "Admin") : "";
+        const authName = isCheckin ? (checkinSignerName || form.responsible || "") : "";
         const authTime = isCheckin
           ? (form.checkin_signature_time
             ? new Date(form.checkin_signature_time).toLocaleString()
             : form.date_checkin || new Date().toLocaleString())
           : "";
 
-        if (!isCheckin) return ""; // Only show authority signature on check-in invoice
+        if (!isCheckin) return "";
 
         if (authImg) {
-          return `<img src="${authImg}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/><div><strong>Authority</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
+          return `<img src="${authImg}" style="width:${sigW}px;height:${sigH}px;object-fit:contain;margin-bottom:2px;"/><div><strong>Authority</strong></div><div>${authName}</div><div style="font-size:${sigFontSize};color:#666">${authTime}</div>`;
         }
-        return `<hr/><div><strong>Authority Signature</strong></div><div>${authName}</div><div style="font-size:11px;color:#666">${authTime}</div>`;
+        return `<hr/><div><strong>Authority Signature</strong></div><div>${authName}</div><div style="font-size:${sigFontSize};color:#666">${authTime}</div>`;
       })()}
       </div>
       ${isCheckin && assets.discountAuthSignature ? `<div class="sig-col">
-        <img src="${assets.discountAuthSignature}" style="width:220px;height:90px;object-fit:contain;margin-bottom:6px;"/>
-        <div><strong>Discount Authorizer</strong></div>
+        <img src="${assets.discountAuthSignature}" style="width:${sigW}px;height:${sigH}px;object-fit:contain;margin-bottom:2px;"/>
+        <div><strong>Discount Auth.</strong></div>
         <div>${discountAuthName || ""}</div>
-        <div style="font-size:11px;color:#666">${new Date(form.discount_auth_signature_time).toLocaleString()}</div>
+        <div style="font-size:${sigFontSize};color:#666">${new Date(form.discount_auth_signature_time).toLocaleString()}</div>
       </div>` : ""}
     </div>
 
@@ -1008,7 +1026,13 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     assets.discountAuthSignature = await resolveImageDataUri(discountAuthSignatureUri || existingOrder?.discount_auth_signature);
 
     const html = buildInvoiceHtml(invoiceType, assets);
-    const { uri } = await Print.printToFileAsync({ html, base64: false });
+    const printOptions = { html, base64: false };
+    // Set explicit page dimensions for A5 (148mm x 210mm = 420pt x 595pt)
+    if (invoicePaperSize === "a5") {
+      printOptions.width = 420;
+      printOptions.height = 595;
+    }
+    const { uri } = await Print.printToFileAsync(printOptions);
     return uri;
   };
 
@@ -1264,36 +1288,57 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     };
   }, [form.partner_email, form.partner_id, odooAuth]);
 
-  // ---------- REFRESH TOOLS on every focus so available_qty is up-to-date ----------
-  const lastFocusFetch = useRef(0);
-  useFocusEffect(
-    useCallback(() => {
-      const now = Date.now();
-      if (now - lastFocusFetch.current < 10000) return; // skip if focused within 10s (e.g. returning from share dialog)
-      lastFocusFetch.current = now;
-      if (odooAuth) {
-        storeFetchTools(odooAuth);
-      }
-    }, [odooAuth])
-  );
-
-  // ---------- LOAD IMAGES FROM ODOO (refreshes every time screen is focused) ----------
+  // ---------- REFRESH ORDER DATA + IMAGES on every focus (single sequential flow) ----------
   const discountAuthorizedThisVisit = useRef(false);
-  const lastImageFetch = useRef(0);
+  const lastFocusFetch = useRef(0);
   useFocusEffect(
     useCallback(() => {
       if (!existingOrder?.odoo_id || !odooAuth) return;
       const now = Date.now();
-      if (now - lastImageFetch.current < 10000) return; // skip if focused within 10s
-      lastImageFetch.current = now;
-      // Reset discount session flag on every new focus (security: re-auth required)
+      if (now - lastFocusFetch.current < 5000) return;
+      lastFocusFetch.current = now;
       discountAuthorizedThisVisit.current = false;
       let cancelled = false;
       (async () => {
         try {
-          // Order-level images
+          // 1. Fetch fresh order data FIRST (lightweight, no images)
+          const fresh = await fetchOrderDataById(odooAuth, existingOrder.odoo_id);
+          if (cancelled || !fresh) return;
+          setState(fresh.state || "draft");
+          const freshForm = {
+            name: fresh.name || "New",
+            customer_id: fresh.customer_id || "",
+            partner_id: fresh.partner_id || null,
+            partner_name: fresh.partner_name || "",
+            partner_phone: fresh.partner_phone || "",
+            partner_email: fresh.partner_email || "",
+            responsible: fresh.responsible || "Admin",
+            date_order: fresh.date_order || today(),
+            date_planned_checkout: fresh.date_planned_checkout || "",
+            date_planned_checkin: fresh.date_planned_checkin || "",
+            date_checkout: fresh.date_checkout || "",
+            date_checkin: fresh.date_checkin || "",
+            date_checkout_raw: fresh.date_checkout_raw || "",
+            rental_period_type: fresh.rental_period_type || "day",
+            rental_duration: fresh.rental_duration?.toString() || "1",
+            actual_duration: fresh.actual_duration || "",
+            advance_amount: fresh.advance_amount?.toString() || "0",
+            advance_returned: fresh.advance_returned || false,
+            damage_charges: fresh.damage_charges?.toString() || "0",
+            discount_amount: fresh.discount_amount?.toString() || "0",
+            notes: fresh.notes || "",
+            terms: fresh.terms || "",
+          };
+          setForm(freshForm);
+          const freshLines = fresh.lines || [];
+          setLines(freshLines);
+          setTimesheet(fresh.timesheet || []);
+          setOdooOrderId(fresh.odoo_id);
+
+          // 2. Fetch order-level images (signatures, ID proof, discount)
           const imgs = await fetchOrderImages(odooAuth, existingOrder.odoo_id);
           if (cancelled || !imgs) return;
+          // Checkout signature & ID proof
           if (imgs.customer_signature) {
             setCheckoutSignatureUri(base64ToDataUri(imgs.customer_signature));
             setCheckoutSignature(true);
@@ -1302,15 +1347,39 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             setIdProofUri(base64ToDataUri(imgs.id_proof_image));
             setCheckoutIdProof(true);
           }
+          // checkout_signature_date covers both signature and ID proof in Odoo
+          if (imgs.checkout_signature_date) {
+            setCheckoutSignatureTime(imgs.checkout_signature_date);
+            setIdProofTimestamp(imgs.checkout_signature_date);
+          } else if (freshForm.date_checkout) {
+            // Fallback to checkout date
+            if (imgs.customer_signature) setCheckoutSignatureTime(freshForm.date_checkout);
+            if (imgs.id_proof_image) setIdProofTimestamp(freshForm.date_checkout);
+          }
+          // Checkin customer signature
           if (imgs.checkin_customer_signature) {
             setCheckinSignatureUri(base64ToDataUri(imgs.checkin_customer_signature));
             setCheckinSignature(true);
           }
+          if (imgs.checkin_customer_signature_date) {
+            setCheckinSignatureTime(imgs.checkin_customer_signature_date);
+          } else if (imgs.checkin_customer_signature && freshForm.date_checkin) {
+            setCheckinSignatureTime(freshForm.date_checkin);
+          }
+          // Checkin authority signature
           if (imgs.checkin_signature) {
             setCheckinAuthoritySignatureUri(base64ToDataUri(imgs.checkin_signature));
             setCheckinAuthoritySignature(true);
           }
-          // Refresh discount authorization data from Odoo
+          if (imgs.checkin_signature_date) {
+            setCheckinAuthoritySignatureTime(imgs.checkin_signature_date);
+          } else if (imgs.checkin_signature && freshForm.date_checkin) {
+            setCheckinAuthoritySignatureTime(freshForm.date_checkin);
+          }
+          if (imgs.checkin_signer_name) {
+            setCheckinSignerName(imgs.checkin_signer_name);
+          }
+          // Discount authorization
           if (imgs.discount_auth_signature) {
             setDiscountAuthSignatureUri(base64ToDataUri(imgs.discount_auth_signature));
           } else {
@@ -1321,16 +1390,22 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           } else {
             setDiscountAuthPhotoUri(null);
           }
+          if (imgs.discount_applied_date) {
+            setDiscountAuthSignatureTime(imgs.discount_applied_date);
+            setDiscountAuthPhotoTime(imgs.discount_applied_date);
+          } else {
+            if (imgs.discount_auth_photo) setDiscountAuthPhotoTime(freshForm.date_checkout || freshForm.date_order);
+            if (imgs.discount_auth_signature) setDiscountAuthSignatureTime(freshForm.date_checkout || freshForm.date_order);
+          }
           if (imgs.discount_authorized_by) {
             setDiscountAuthName(imgs.discount_authorized_by);
           } else {
             setDiscountAuthName("");
           }
-          // Line-level images (tool photos)
-          const lineIds = existingOrder.lines
-            ?.map((l) => l.odoo_id)
-            .filter(Boolean);
-          if (lineIds && lineIds.length > 0) {
+
+          // 3. Fetch line-level images using FRESH line IDs (no race condition)
+          const lineIds = freshLines.map((l) => l.odoo_id).filter(Boolean);
+          if (lineIds.length > 0) {
             const lineImgs = await fetchOrderLineImages(odooAuth, lineIds);
             if (cancelled) return;
             const photoMap = {};
@@ -1338,23 +1413,16 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             const checkinPhotoMap = {};
             const checkinTimeMap = {};
             lineImgs.forEach((li) => {
-              const idx = existingOrder.lines.findIndex(
-                (l) => l.odoo_id === li.id
-              );
+              const idx = freshLines.findIndex((l) => Number(l.odoo_id) === Number(li.id));
               if (idx >= 0) {
                 if (li.checkout_tool_image) {
                   photoMap[idx] = base64ToDataUri(li.checkout_tool_image);
-                }
-                if (li.checkout_tool_image_timestamp) {
-                  timeMap[idx] = li.checkout_tool_image_timestamp;
+                  timeMap[idx] = freshForm.date_checkout || freshForm.date_order || "";
                 }
                 if (li.checkin_tool_image) {
                   checkinPhotoMap[idx] = base64ToDataUri(li.checkin_tool_image);
+                  checkinTimeMap[idx] = freshForm.date_checkin || "";
                 }
-                if (li.checkin_tool_image_timestamp) {
-                  checkinTimeMap[idx] = li.checkin_tool_image_timestamp;
-                }
-                // Sync conditions too
                 if (li.checkout_condition) {
                   updateLine(idx, "checkout_condition", li.checkout_condition);
                 }
@@ -1369,11 +1437,20 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             setToolCheckinPhotoTimestamps(checkinTimeMap);
           }
         } catch (e) {
-          console.warn("Failed to load order images:", e.message);
+          console.warn("Failed to refresh order data/images:", e.message);
         }
       })();
       return () => { cancelled = true; };
     }, [existingOrder?.odoo_id, odooAuth])
+  );
+
+  // ---------- REFRESH TOOLS on every focus so available_qty is up-to-date ----------
+  useFocusEffect(
+    useCallback(() => {
+      if (odooAuth) {
+        storeFetchTools(odooAuth);
+      }
+    }, [odooAuth])
   );
 
   // ---------- AUTO-SAVE ON LEAVE ----------
@@ -2025,7 +2102,24 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   {renderConditionChips(line.checkin_condition, (v) => updateLine(idx, "checkin_condition", v))}
                 </View>
 
-                {/* Check-in Tool Photo removed per user request */}
+                {/* Check-in Tool Photo (optional) */}
+                <View style={ciStyles.fieldBlock}>
+                  <Text style={ciStyles.fieldLabel}>Tool Photo (Check-In)</Text>
+                  {toolCheckinPhotoUris[idx] ? (
+                    <View style={styles.capturedImageWrap}>
+                      <Image source={{ uri: toolCheckinPhotoUris[idx] }} style={styles.capturedImage} />
+                      {toolCheckinPhotoTimestamps[idx] && <Text style={styles.photoTimestamp}>{toolCheckinPhotoTimestamps[idx]}</Text>}
+                      <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeCheckinToolPhoto(idx)}>
+                        <Text style={styles.photoRemoveBtnText}>X</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={coStyles.captureBtn} onPress={() => openCameraForCheckinToolPhoto(idx)}>
+                      <Text style={{ fontSize: 22, marginBottom: 2 }}>{"\uD83D\uDCF7"}</Text>
+                      <Text style={coStyles.captureBtnText}>Capture Check-In Photo</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
 
                 {/* Late Fee Section */}
                 <View style={ciStyles.lateFeeSectionCard}>
@@ -3240,7 +3334,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                     <Text style={[styles.detailSmallValue, { color: "#F44336", fontWeight: "800" }]}>-${parseFloat(form.discount_amount).toFixed(2)}</Text>
                   </View>
                 </View>
-                <DetailItem label="Authorization Date" value={form.discount_auth_signature_time ? new Date(form.discount_auth_signature_time).toLocaleString() : ''} />
+                <DetailItem label="Authorization Date" value={discountAuthSignatureTime ? new Date(discountAuthSignatureTime).toLocaleString() : (form.discount_auth_signature_time ? new Date(form.discount_auth_signature_time).toLocaleString() : '')} />
               </View>
 
               {/* Authorizer Photo */}

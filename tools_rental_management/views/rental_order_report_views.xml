@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══ CLIENT ACTION: Order Report Dashboard ═══ -->
+    <record id="action_rental_order_report_dashboard" model="ir.actions.client">
+        <field name="name">Order Reports</field>
+        <field name="tag">rental_order_report_dashboard</field>
+    </record>
+
+</odoo>

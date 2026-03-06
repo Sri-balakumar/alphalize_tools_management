@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══ KANBAN: Inject "Generate Serialized Products" after "New" button ═══ -->
+    <t t-name="tools_rental_management.GenerateSerialsKanban" t-inherit="web.KanbanView" t-inherit-mode="extension">
+        <xpath expr="//button[hasclass('o-kanban-button-new')]" position="after">
+            <button t-if="showGenerateSerialsButton"
+                    type="button"
+                    class="btn btn-primary ms-1 o_generate_serials_btn"
+                    t-on-click="onGenerateSerials"
+                    title="Generate Serialized Products">
+                <i class="fa fa-cogs me-1"/>Generate Serialized Products
+            </button>
+        </xpath>
+    </t>
+
+    <!-- ═══ LIST: Inject "Generate Serialized Products" after "New" button ═══ -->
+    <t t-name="tools_rental_management.GenerateSerialsList" t-inherit="web.ListView" t-inherit-mode="extension">
+        <xpath expr="//button[hasclass('o_list_button_add')]" position="after">
+            <button t-if="showGenerateSerialsButton"
+                    type="button"
+                    class="btn btn-primary ms-1 o_generate_serials_btn"
+                    t-on-click="onGenerateSerials"
+                    title="Generate Serialized Products">
+                <i class="fa fa-cogs me-1"/>Generate Serialized Products
+            </button>
+        </xpath>
+    </t>
+
+</templates>

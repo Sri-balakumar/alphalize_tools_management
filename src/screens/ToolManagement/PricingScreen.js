@@ -1,14 +1,16 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
+import useAuthStore from "@stores/auth/useAuthStore";
 
 const PERIOD_LABELS = {
   day: "Day",
@@ -18,7 +20,17 @@ const PERIOD_LABELS = {
 };
 
 const PricingScreen = ({ navigation }) => {
+  const odooAuth = useAuthStore((s) => s.odooAuth);
   const pricingRules = useToolStore((s) => s.pricingRules);
+  const fetchPricingRules = useToolStore((s) => s.fetchPricingRules);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (odooAuth) {
+        fetchPricingRules(odooAuth);
+      }
+    }, [odooAuth])
+  );
 
   const renderRule = ({ item }) => (
     <View style={styles.card}>

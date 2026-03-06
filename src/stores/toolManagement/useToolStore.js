@@ -191,6 +191,9 @@ const useToolStore = create(
     {
       name: "tool-management-storage",
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: () => ({
+        // Don't persist any data — always fetch fresh from Odoo
+      }),
     }
   )
 );

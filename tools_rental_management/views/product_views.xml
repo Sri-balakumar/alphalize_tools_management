@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         SECTION 1: product.product form/list overrides (original)
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ═══ PRODUCT FORM: Add rental checkbox ═══ -->
+    <record id="view_product_form_rental_inherit" model="ir.ui.view">
+        <field name="name">product.product.form.rental.inherit</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='options']" position="inside">
+                <span class="d-inline-block">
+                    <field name="is_rental_tool"/>
+                    <label for="is_rental_tool"/>
+                </span>
+            </xpath>
+            <xpath expr="//div[@name='standard_price_uom']" position="after">
+                <label for="rental_category_id"/>
+                <div>
+                    <field name="rental_category_id" class="oe_inline"
+                           options="{'no_create_edit': False}"/>
+                </div>
+                <label for="rental_late_fee_per_day"/>
+                <div>
+                    <field name="rental_late_fee_per_day"
+                           class="oe_inline" widget="monetary"
+                           options="{'currency_field': 'currency_id', 'field_digits': True}"/>
+                </div>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_sync_to_rental" type="object"
+                        class="oe_stat_button" icon="fa-wrench"
+                        help="Sync this product to Rental Tools">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Sync to Rental</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ═══ PRODUCT LIST: Add rental column ═══ -->
+    <record id="view_product_tree_rental_inherit" model="ir.ui.view">
+        <field name="name">product.product.tree.rental.inherit</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_product_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="inside">
+                <field name="is_rental_tool" string="Rental" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ═══ ACTION: Tools & Equipment → product.product ═══ -->
+    <record id="action_rental_products" model="ir.actions.act_window">
+        <field name="name">Tools &amp; Equipment</field>
+        <field name="res_model">product.product</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_rental_product_kanban')}),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_rental_product_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_rental_product_form')})]"/>
+        <field name="search_view_id" ref="view_rental_product_search"/>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first product for rental
+            </p>
+            <p>
+                Products created here will be available in the Tool dropdown on Rental Orders.
+                Click "Sync to Rental" on any product to make it available for rental.
+            </p>
+        </field>
+    </record>
+
+
+    <!-- ════════════════════════════════════════════════════════════════
+         SECTION 2: Inventory > Products (product.template) — rental UI
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ═══ KANBAN VIEW for product.template with rental card UI + js_class ═══ -->
+    <record id="view_product_template_kanban_rental" model="ir.ui.view">
+        <field name="name">product.template.kanban.rental</field>
+        <field name="model">product.template</field>
+        <field name="priority">999</field>
+        <field name="arch" type="xml">
+            <kanban js_class="rental_template_kanban" sample="1">
+                <field name="id"/>
+                <field name="name"/>
+                <field name="default_code"/>
+                <field name="list_price"/>
+                <field name="is_rental"/>
+                <field name="rental_categ_id"/>
+                <field name="rental_late_fee_per_day"/>
+                <field name="image_128"/>
+                <field name="currency_id"/>
+                <field name="product_variant_count"/>
+                <field name="activity_state"/>
+                <templates>
+                    <t t-name="card" class="o_rental_tool_card">
+                        <!-- Image section with rental badge -->
+                        <div class="o_rental_card_image">
+                            <field name="image_128" widget="image"
+                                   options="{'preview_image': 'image_128'}"/>
+                            <div class="o_rental_card_badge">
+                                <t t-if="record.is_rental.raw_value">
+                                    <span class="badge text-bg-success">Available</span>
+                                </t>
+                                <t t-else="">
+                                    <span class="badge text-bg-secondary">Not Rental</span>
+                                </t>
+                            </div>
+                        </div>
+                        <!-- Details section -->
+                        <div class="o_rental_card_body">
+                            <strong class="o_rental_card_title">
+                                <field name="name"/>
+                            </strong>
+                            <div t-if="record.default_code.value"
+                                 class="o_rental_card_serial">
+                                <i class="fa fa-barcode me-1"/>
+                                <field name="default_code"/>
+                            </div>
+                            <div t-if="record.product_variant_count.raw_value &gt; 1"
+                                 style="font-size:12px; color:#666; margin-bottom:4px;">
+                                <field name="product_variant_count"/> Variants
+                            </div>
+                            <div t-if="record.rental_categ_id.value"
+                                 style="font-size:11px; color:#714B67; margin-bottom:6px;">
+                                <i class="fa fa-tag me-1"/>
+                                <field name="rental_categ_id"/>
+                            </div>
+                            <div class="o_rental_card_prices">
+                                <div class="o_rental_card_price">
+                                    <field name="list_price" widget="monetary"/>
+                                    <span class="o_rental_card_price_label">/day</span>
+                                </div>
+                                <div t-if="record.rental_late_fee_per_day.raw_value &gt; 0"
+                                     class="o_rental_card_late">
+                                    Late: <field name="rental_late_fee_per_day" widget="monetary"/>/day
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ═══ LIST VIEW for product.template with rental columns + js_class ═══ -->
+    <record id="view_product_template_list_rental" model="ir.ui.view">
+        <field name="name">product.template.list.rental</field>
+        <field name="model">product.template</field>
+        <field name="priority">999</field>
+        <field name="arch" type="xml">
+            <list js_class="rental_template_list" sample="1">
+                <field name="default_code" string="Reference" optional="show"/>
+                <field name="name" string="Product"/>
+                <field name="rental_categ_id" string="Rental Category" optional="show"/>
+                <field name="list_price" string="Price" widget="monetary"/>
+                <field name="rental_late_fee_per_day" string="Late Fee/Day" widget="monetary" optional="show"/>
+                <field name="is_rental" string="Rental" widget="boolean_toggle"/>
+                <field name="type" string="Type" optional="hide"/>
+                <field name="categ_id" string="Product Category" optional="hide"/>
+                <field name="product_variant_count" string="Variants" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══ Inject rental kanban into Inventory > Products (action-390) ═══ -->
+    <record id="rental_stock_product_kanban_view_link" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="view_product_template_kanban_rental"/>
+        <field name="act_window_id" ref="stock.product_template_action_product"/>
+    </record>
+
+    <!-- ═══ Inject rental list into Inventory > Products (action-390) ═══ -->
+    <record id="rental_stock_product_list_view_link" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_product_template_list_rental"/>
+        <field name="act_window_id" ref="stock.product_template_action_product"/>
+    </record>
+
+
+    <!-- ════════════════════════════════════════════════════════════════
+         SECTION 3: Purchase > Products — rental UI + Generate button
+         Override the action's view_ids to replace all view links at once.
+         This avoids the UniqueViolation on ir_act_window_view_unique_mode_per_action.
+         ════════════════════════════════════════════════════════════════ -->
+
+    <record id="purchase.product_normal_action_puchased" model="ir.actions.act_window">
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_product_template_kanban_rental'), 'sequence': 1}),
+            (0, 0, {'view_mode': 'list',   'view_id': ref('view_product_template_list_rental'),   'sequence': 2}),
+            (0, 0, {'view_mode': 'form',   'view_id': False,                                      'sequence': 3})]"/>
+    </record>
+
+
+    <!-- ════════════════════════════════════════════════════════════════
+         SECTION 3: Server actions (original)
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ═══ SERVER ACTION: Mark All Products for Rental ═══ -->
+    <record id="action_mark_all_rental_wizard" model="ir.actions.server">
+        <field name="name">✔ Mark All for Rental</field>
+        <field name="model_id" ref="product.model_product_product"/>
+        <field name="state">code</field>
+        <field name="code">
+action = env['product.product'].action_mark_all_rental()
+        </field>
+    </record>
+
+    <!-- ═══ SERVER ACTION: Remove All Products from Rental ═══ -->
+    <record id="action_unmark_all_rental_wizard" model="ir.actions.server">
+        <field name="name">✘ Remove All from Rental</field>
+        <field name="model_id" ref="product.model_product_product"/>
+        <field name="state">code</field>
+        <field name="code">
+action = env['product.product'].action_unmark_all_rental()
+        </field>
+    </record>
+
+    <!-- ═══ SERVER ACTION: Sync All Products to Rental Tools ═══ -->
+    <record id="action_sync_all_products_rental" model="ir.actions.server">
+        <field name="name">Sync All Products to Rental Tools</field>
+        <field name="model_id" ref="product.model_product_product"/>
+        <field name="binding_model_id" ref="product.model_product_product"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+if records:
+    records._sync_to_rental_tool()
+        </field>
+    </record>
+
+    <!-- ═══ MENU ACTION: Sync All Products (in Rental menu) ═══ -->
+    <record id="action_sync_all_products_wizard" model="ir.actions.server">
+        <field name="name">Sync All Products → Tools</field>
+        <field name="model_id" ref="product.model_product_product"/>
+        <field name="state">code</field>
+        <field name="code">
+action = env['product.product'].action_sync_all_products_to_rental()
+        </field>
+    </record>
+
+</odoo>

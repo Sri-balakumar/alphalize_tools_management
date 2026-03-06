@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
@@ -6,14 +6,28 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
+import useAuthStore from "@stores/auth/useAuthStore";
 
 const ToolCategoriesScreen = ({ navigation }) => {
+  const odooAuth = useAuthStore((s) => s.odooAuth);
   const categories = useToolStore((s) => s.categories);
   const tools = useToolStore((s) => s.tools);
+  const fetchCategories = useToolStore((s) => s.fetchCategories);
+  const fetchTools = useToolStore((s) => s.fetchTools);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (odooAuth) {
+        fetchCategories(odooAuth);
+        fetchTools(odooAuth);
+      }
+    }, [odooAuth])
+  );
 
   // Compute tool_count dynamically from store tools
   const categoriesWithCount = categories.map((cat) => ({

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══ WIZARD FORM ═══ -->
+    <record id="view_rental_report_download_form" model="ir.ui.view">
+        <field name="name">rental.report.download.form</field>
+        <field name="model">rental.report.download</field>
+        <field name="arch" type="xml">
+            <form string="Download Report">
+                <div class="text-center mb-4 mt-3">
+                    <h3>Download Tool Availability Report</h3>
+                    <p class="text-muted">
+                        Choose a format to download the full report with all tool details.
+                    </p>
+                </div>
+                <footer>
+                    <button string="Download Excel"
+                            name="action_download_xlsx"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-file-excel-o"/>
+                    <button string="Download PDF"
+                            name="action_download_pdf"
+                            type="object"
+                            class="btn-secondary"
+                            icon="fa-file-pdf-o"/>
+                    <button string="Cancel"
+                            class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══ ACTION: Open download wizard ═══ -->
+    <record id="action_rental_report_download_wizard" model="ir.actions.act_window">
+        <field name="name">Download Report</field>
+        <field name="res_model">rental.report.download</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

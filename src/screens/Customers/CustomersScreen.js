@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,15 +6,27 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { TextInput } from "@components/common/TextInput";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
+import useAuthStore from "@stores/auth/useAuthStore";
 
 const CustomersScreen = ({ navigation }) => {
+  const odooAuth = useAuthStore((s) => s.odooAuth);
   const customers = useToolStore((s) => s.customers);
+  const fetchCustomers = useToolStore((s) => s.fetchCustomers);
   const [search, setSearch] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      if (odooAuth) {
+        fetchCustomers(odooAuth);
+      }
+    }, [odooAuth])
+  );
 
   const filteredCustomers = customers.filter(
     (c) =>

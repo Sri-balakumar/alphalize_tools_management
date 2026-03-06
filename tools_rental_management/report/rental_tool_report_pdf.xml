@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══ REPORT ACTION ═══ -->
+    <record id="action_report_tool_availability_pdf" model="ir.actions.report">
+        <field name="name">Tool Availability Report</field>
+        <field name="model">rental.tool.report</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tools_rental_management.report_tool_availability_document</field>
+        <field name="report_file">tools_rental_management.report_tool_availability_document</field>
+        <field name="print_report_name">'Tool_Availability_Report'</field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- ═══ QWEB TEMPLATE ═══ -->
+    <template id="report_tool_availability_document">
+        <t t-call="web.html_container">
+            <t t-set="data_report_landscape" t-value="True"/>
+            <div class="page" style="font-family: Arial, sans-serif;">
+
+                <!-- Header -->
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #714B67; margin-bottom: 5px;">
+                        Tool Availability Report
+                    </h2>
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                        Generated on: <span t-esc="context_timestamp(datetime.datetime.now()).strftime('%B %d, %Y %I:%M %p')"/>
+                    </p>
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                        Company: <span t-esc="res_company.name"/>
+                    </p>
+                </div>
+
+                <!-- Summary Cards -->
+                <t t-set="total_tools" t-value="len(docs)"/>
+                <t t-set="sum_total_qty" t-value="sum(d.total_qty for d in docs)"/>
+                <t t-set="sum_available" t-value="sum(d.available_qty for d in docs)"/>
+                <t t-set="sum_checked_out" t-value="sum(d.checked_out_qty for d in docs)"/>
+                <t t-set="sum_revenue" t-value="sum(d.total_revenue for d in docs)"/>
+                <t t-set="sum_rentals" t-value="sum(d.total_rentals for d in docs)"/>
+
+                <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
+                    <tr>
+                        <td style="width: 20%; text-align: center; padding: 10px; background: #f8f4f7; border: 1px solid #ddd; border-radius: 4px;">
+                            <div style="font-size: 22px; font-weight: bold; color: #714B67;">
+                                <t t-esc="total_tools"/>
+                            </div>
+                            <div style="font-size: 11px; color: #666;">Total Tools</div>
+                        </td>
+                        <td style="width: 20%; text-align: center; padding: 10px; background: #f0faf0; border: 1px solid #ddd;">
+                            <div style="font-size: 22px; font-weight: bold; color: #28a745;">
+                                <t t-esc="'%.0f' % sum_available"/>
+                            </div>
+                            <div style="font-size: 11px; color: #666;">Available</div>
+                        </td>
+                        <td style="width: 20%; text-align: center; padding: 10px; background: #fff5f5; border: 1px solid #ddd;">
+                            <div style="font-size: 22px; font-weight: bold; color: #dc3545;">
+                                <t t-esc="'%.0f' % sum_checked_out"/>
+                            </div>
+                            <div style="font-size: 11px; color: #666;">Checked Out</div>
+                        </td>
+                        <td style="width: 20%; text-align: center; padding: 10px; background: #f4f8ff; border: 1px solid #ddd;">
+                            <div style="font-size: 22px; font-weight: bold; color: #007bff;">
+                                <t t-esc="sum_rentals"/>
+                            </div>
+                            <div style="font-size: 11px; color: #666;">Total Rentals</div>
+                        </td>
+                        <td style="width: 20%; text-align: center; padding: 10px; background: #fffbf0; border: 1px solid #ddd;">
+                            <div style="font-size: 22px; font-weight: bold; color: #fd7e14;">
+                                $ <t t-esc="'%.2f' % sum_revenue"/>
+                            </div>
+                            <div style="font-size: 11px; color: #666;">Total Revenue</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Data Table -->
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                    <thead>
+                        <tr style="background: #714B67; color: white;">
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">#</th>
+                            <th style="padding: 8px 6px; text-align: left; border: 1px solid #5a3a52;">Tool Name</th>
+                            <th style="padding: 8px 6px; text-align: left; border: 1px solid #5a3a52;">Category</th>
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">Status</th>
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">Total Qty</th>
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">Available</th>
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">Checked Out</th>
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">Active Orders</th>
+                            <th style="padding: 8px 6px; text-align: center; border: 1px solid #5a3a52;">Total Rentals</th>
+                            <th style="padding: 8px 6px; text-align: right; border: 1px solid #5a3a52;">Price / Day</th>
+                            <th style="padding: 8px 6px; text-align: right; border: 1px solid #5a3a52;">Late Fee / Day</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-set="row_idx" t-value="0"/>
+                        <t t-foreach="docs" t-as="rec">
+                            <t t-set="row_idx" t-value="row_idx + 1"/>
+                            <tr t-attf-style="background: {{ '#f8f8f8' if row_idx % 2 == 0 else '#ffffff' }};">
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">
+                                    <t t-esc="row_idx"/>
+                                </td>
+                                <td style="padding: 6px; text-align: left; border: 1px solid #ddd; font-weight: bold;">
+                                    <t t-esc="rec.name"/>
+                                </td>
+                                <td style="padding: 6px; text-align: left; border: 1px solid #ddd;">
+                                    <t t-esc="rec.category_id.name"/>
+                                </td>
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">
+                                    <span t-if="rec.state == 'available'"
+                                          style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 9px;">
+                                        Available
+                                    </span>
+                                    <span t-if="rec.state == 'rented'"
+                                          style="background: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 9px;">
+                                        Rented
+                                    </span>
+                                    <span t-if="rec.state == 'maintenance'"
+                                          style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 9px;">
+                                        Maintenance
+                                    </span>
+                                    <span t-if="rec.state == 'retired'"
+                                          style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 10px; font-size: 9px;">
+                                        Retired
+                                    </span>
+                                </td>
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">
+                                    <t t-esc="'%.0f' % rec.total_qty"/>
+                                </td>
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd; color: #28a745; font-weight: bold;">
+                                    <t t-esc="'%.0f' % rec.available_qty"/>
+                                </td>
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd; color: #dc3545; font-weight: bold;">
+                                    <t t-esc="'%.0f' % rec.checked_out_qty"/>
+                                </td>
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">
+                                    <t t-esc="rec.active_rentals"/>
+                                </td>
+                                <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">
+                                    <t t-esc="rec.total_rentals"/>
+                                </td>
+                                <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">
+                                    $ <t t-esc="'%.2f' % rec.price_per_day"/>
+                                </td>
+                                <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">
+                                    $ <t t-esc="'%.2f' % rec.late_fee_per_day"/>
+                                </td>
+                            </tr>
+                        </t>
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f2f2f2; font-weight: bold; font-size: 11px;">
+                            <td colspan="4" style="padding: 8px 6px; text-align: right; border: 1px solid #ddd;">
+                                TOTAL
+                            </td>
+                            <td style="padding: 8px 6px; text-align: center; border: 1px solid #ddd;">
+                                <t t-esc="'%.0f' % sum_total_qty"/>
+                            </td>
+                            <td style="padding: 8px 6px; text-align: center; border: 1px solid #ddd; color: #28a745;">
+                                <t t-esc="'%.0f' % sum_available"/>
+                            </td>
+                            <td style="padding: 8px 6px; text-align: center; border: 1px solid #ddd; color: #dc3545;">
+                                <t t-esc="'%.0f' % sum_checked_out"/>
+                            </td>
+                            <td style="padding: 8px 6px; text-align: center; border: 1px solid #ddd;">
+                                <t t-esc="sum(d.active_rentals for d in docs)"/>
+                            </td>
+                            <td style="padding: 8px 6px; text-align: center; border: 1px solid #ddd;">
+                                <t t-esc="sum_rentals"/>
+                            </td>
+                            <td colspan="2" style="padding: 8px 6px; text-align: center; border: 1px solid #ddd;">
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <!-- Footer Note -->
+                <div style="margin-top: 20px; text-align: center; font-size: 9px; color: #aaa;">
+                    Tools Rental Management - <t t-esc="res_company.name"/>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>
