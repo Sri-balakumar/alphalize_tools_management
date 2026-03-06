@@ -25,6 +25,7 @@ const MENU_ITEMS = [
   { id: "7", title: "Tool Availability", screen: "ToolAvailabilityScreen", icon: "📊", bg: "#E8EAF6" },
   { id: "8", title: "Order Reports", screen: "OrderReportsScreen", icon: "📑", bg: "#FBE9E7" },
   { id: "9", title: "Discount Details", screen: "DiscountDetailsScreen", icon: "🏷️", bg: "#FCE4EC" },
+  { id: "10", title: "Rental Dashboard", screen: "RentalDashboardScreen", icon: "📈", bg: "#E1F5FE" },
 ];
 
 const ToolManagementScreen = ({ navigation }) => {
