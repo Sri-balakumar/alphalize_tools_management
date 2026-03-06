@@ -16,12 +16,15 @@ import useAuthStore from "@stores/auth/useAuthStore";
 import { showToastMessage } from "@components/Toast";
 
 const MENU_ITEMS = [
-  { id: "1", title: "Tool Categories", screen: "ToolCategoriesScreen", icon: "📂", bg: "#E8F5E9" },
-  { id: "2", title: "Tools & Equipment", screen: "ToolsScreen", icon: "🔧", bg: "#FFF3E0" },
-  { id: "3", title: "Rental Orders", screen: "RentalOrdersScreen", icon: "📋", bg: "#E3F2FD" },
-  { id: "4", title: "Customers", screen: "CustomersScreen", icon: "👥", bg: "#F3E5F5" },
-  { id: "5", title: "Pricing Rules", screen: "PricingScreen", icon: "💰", bg: "#FFF8E1" },
-  { id: "6", title: "New Rental", screen: "RentalOrderFormScreen", icon: "➕", bg: "#E0F7FA" },
+  { id: "1", title: "New Rental", screen: "RentalOrderFormScreen", icon: "➕", bg: "#E0F7FA" },
+  { id: "2", title: "Rental Orders", screen: "RentalOrdersScreen", icon: "📋", bg: "#E3F2FD" },
+  { id: "3", title: "Tools & Equipment", screen: "ToolsScreen", icon: "🔧", bg: "#FFF3E0" },
+  { id: "4", title: "Pricing Rules", screen: "PricingScreen", icon: "💰", bg: "#FFF8E1" },
+  { id: "5", title: "Tool Categories", screen: "ToolCategoriesScreen", icon: "📂", bg: "#E8F5E9" },
+  { id: "6", title: "Customers", screen: "CustomersScreen", icon: "👥", bg: "#F3E5F5" },
+  { id: "7", title: "Tool Availability", screen: "ToolAvailabilityScreen", icon: "📊", bg: "#E8EAF6" },
+  { id: "8", title: "Order Reports", screen: "OrderReportsScreen", icon: "📑", bg: "#FBE9E7" },
+  { id: "9", title: "Discount Details", screen: "DiscountDetailsScreen", icon: "🏷️", bg: "#FCE4EC" },
 ];
 
 const ToolManagementScreen = ({ navigation }) => {

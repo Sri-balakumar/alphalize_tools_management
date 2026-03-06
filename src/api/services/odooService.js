@@ -476,6 +476,7 @@ const mapOrderLine = (l) => ({
   damage_charge: String(l.damage_charge || 0),
   discount_type: l.discount_type || "",
   discount_value: String(l.discount_value || 0),
+  discount_line_amount: l.discount_line_amount || 0,
   notes: l.notes || "",
   extra_days: String(Math.max(0, (parseInt(l.actual_duration) || 0) - (parseInt(l.planned_duration) || 0))),
   late_fee_per_day: String(l.late_fee_per_day || 0),
@@ -634,6 +635,41 @@ export const updatePricingRule = async (auth, id, values) => {
   return true;
 };
 
+// =============================================
+// TOOL AVAILABILITY REPORT - rental.tool.report
+// =============================================
+
+const REPORT_FIELDS = [
+  "name", "tool_id", "category_id", "state",
+  "total_qty", "available_qty", "checked_out_qty",
+  "total_rentals", "active_rentals", "total_revenue",
+  "price_per_day", "late_fee_per_day",
+];
+
+export const fetchToolReport = async (auth) => {
+  const records = await odooSearchRead(
+    auth,
+    "rental.tool.report",
+    [],
+    REPORT_FIELDS,
+    { order: "name" }
+  );
+  return records.map((r) => ({
+    id: String(r.id),
+    name: r.name || "",
+    category_name: r.category_id ? r.category_id[1] : "",
+    state: r.state || "available",
+    total_qty: r.total_qty || 0,
+    available_qty: r.available_qty || 0,
+    checked_out_qty: r.checked_out_qty || 0,
+    active_orders: r.active_rentals || 0,
+    total_rentals: r.total_rentals || 0,
+    total_revenue: r.total_revenue || 0,
+    price_per_day: r.price_per_day || 0,
+    late_fee_per_day: r.late_fee_per_day || 0,
+  }));
+};
+
 export default {
   fetchCategories,
   fetchTools,
@@ -663,4 +699,5 @@ export default {
   updateCustomer,
   fetchPricingRules,
   updatePricingRule,
+  fetchToolReport,
 };

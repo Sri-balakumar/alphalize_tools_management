@@ -7,6 +7,7 @@ import {
   fetchOrders,
   fetchCustomers,
   fetchPricingRules,
+  fetchToolReport,
   createTool as apiCreateTool,
   updateTool as apiUpdateTool,
   createOrder as apiCreateOrder,
@@ -29,6 +30,7 @@ const useToolStore = create(
       customers: [],
       orders: [],
       pricingRules: [],
+      toolReport: [],
       // Loading states
       loading: false,
       error: null,
@@ -96,6 +98,15 @@ const useToolStore = create(
           set({ pricingRules });
         } catch (e) {
           console.warn("fetchPricingRules error:", e.message);
+        }
+      },
+
+      fetchToolReport: async (auth) => {
+        try {
+          const toolReport = await fetchToolReport(auth);
+          set({ toolReport });
+        } catch (e) {
+          console.warn("fetchToolReport error:", e.message);
         }
       },
 
@@ -185,6 +196,7 @@ const useToolStore = create(
           customers: [],
           orders: [],
           pricingRules: [],
+          toolReport: [],
           error: null,
         }),
     }),

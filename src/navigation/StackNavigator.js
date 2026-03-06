@@ -10,11 +10,14 @@ import ToolManagementScreen from "@screens/ToolManagement/ToolManagementScreen";
 import ToolCategoriesScreen from "@screens/ToolManagement/ToolCategoriesScreen";
 import PricingScreen from "@screens/ToolManagement/PricingScreen";
 import PricingFormScreen from "@screens/ToolManagement/PricingFormScreen";
+import ToolAvailabilityScreen from "@screens/ToolManagement/ToolAvailabilityScreen";
 import ToolsScreen from "@screens/Tools/ToolsScreen";
 import ToolFormScreen from "@screens/Tools/ToolFormScreen";
 import RentalOrdersScreen from "@screens/Rentals/RentalOrdersScreen";
 import RentalOrderFormScreen from "@screens/Rentals/RentalOrderFormScreen";
 import CustomersScreen from "@screens/Customers/CustomersScreen";
+import OrderReportsScreen from "@screens/Rentals/OrderReportsScreen";
+import DiscountDetailsScreen from "@screens/ToolManagement/DiscountDetailsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -45,6 +48,9 @@ const StackNavigator = () => {
       <Stack.Screen name="RentalOrdersScreen" component={RentalOrdersScreen} />
       <Stack.Screen name="RentalOrderFormScreen" component={RentalOrderFormScreen} />
       <Stack.Screen name="CustomersScreen" component={CustomersScreen} />
+      <Stack.Screen name="ToolAvailabilityScreen" component={ToolAvailabilityScreen} />
+      <Stack.Screen name="OrderReportsScreen" component={OrderReportsScreen} />
+      <Stack.Screen name="DiscountDetailsScreen" component={DiscountDetailsScreen} />
     </Stack.Navigator>
   );
 };
