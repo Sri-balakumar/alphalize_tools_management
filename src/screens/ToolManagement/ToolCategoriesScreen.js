@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useCallback } from "react";
+=======
+import React, { useState } from "react";
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 import {
   View,
   Text,
@@ -6,11 +10,15 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+<<<<<<< HEAD
 import { useFocusEffect } from "@react-navigation/native";
+=======
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
+<<<<<<< HEAD
 import useAuthStore from "@stores/auth/useAuthStore";
 
 const ToolCategoriesScreen = ({ navigation }) => {
@@ -28,6 +36,12 @@ const ToolCategoriesScreen = ({ navigation }) => {
       }
     }, [odooAuth])
   );
+=======
+
+const ToolCategoriesScreen = ({ navigation }) => {
+  const categories = useToolStore((s) => s.categories);
+  const tools = useToolStore((s) => s.tools);
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 
   // Compute tool_count dynamically from store tools
   const categoriesWithCount = categories.map((cat) => ({

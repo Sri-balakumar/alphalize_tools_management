@@ -1,16 +1,26 @@
+<<<<<<< HEAD
 import React, { useCallback } from "react";
+=======
+import React from "react";
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
 } from "react-native";
+<<<<<<< HEAD
 import { useFocusEffect } from "@react-navigation/native";
+=======
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
+<<<<<<< HEAD
 import useAuthStore from "@stores/auth/useAuthStore";
+=======
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 
 const PERIOD_LABELS = {
   day: "Day",
@@ -20,6 +30,7 @@ const PERIOD_LABELS = {
 };
 
 const PricingScreen = ({ navigation }) => {
+<<<<<<< HEAD
   const odooAuth = useAuthStore((s) => s.odooAuth);
   const pricingRules = useToolStore((s) => s.pricingRules);
   const fetchPricingRules = useToolStore((s) => s.fetchPricingRules);
@@ -31,6 +42,9 @@ const PricingScreen = ({ navigation }) => {
       }
     }, [odooAuth])
   );
+=======
+  const pricingRules = useToolStore((s) => s.pricingRules);
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 
   const renderRule = ({ item }) => (
     <View style={styles.card}>

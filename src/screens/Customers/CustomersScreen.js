@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useState, useCallback } from "react";
+=======
+import React, { useState } from "react";
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 import {
   View,
   Text,
@@ -6,12 +10,16 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+<<<<<<< HEAD
 import { useFocusEffect } from "@react-navigation/native";
+=======
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { TextInput } from "@components/common/TextInput";
 import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
+<<<<<<< HEAD
 import useAuthStore from "@stores/auth/useAuthStore";
 
 const CustomersScreen = ({ navigation }) => {
@@ -28,6 +36,13 @@ const CustomersScreen = ({ navigation }) => {
     }, [odooAuth])
   );
 
+=======
+
+const CustomersScreen = ({ navigation }) => {
+  const customers = useToolStore((s) => s.customers);
+  const [search, setSearch] = useState("");
+
+>>>>>>> f186d93c3de7914fcacd7de6d9ae3045bbc30ed5
   const filteredCustomers = customers.filter(
     (c) =>
       !search.trim() ||
