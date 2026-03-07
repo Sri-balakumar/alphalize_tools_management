@@ -11,6 +11,7 @@ import {
   TextInput as RNTextInput,
   KeyboardAvoidingView,
   Platform,
+  InteractionManager,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
@@ -1305,6 +1306,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       lastFocusFetch.current = now;
       discountAuthorizedThisVisit.current = false;
       let cancelled = false;
+      // Wait for navigation animation to finish before fetching
+      const task = InteractionManager.runAfterInteractions(() => {
       (async () => {
         try {
           // 1. Fetch fresh order data FIRST (lightweight, no images)
@@ -1446,7 +1449,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           console.warn("Failed to refresh order data/images:", e.message);
         }
       })();
-      return () => { cancelled = true; };
+      }); // end InteractionManager
+      return () => { cancelled = true; task.cancel(); };
     }, [existingOrder?.odoo_id, odooAuth])
   );
 
@@ -2340,7 +2344,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   const applyDiscount = async () => {
     let totalDiscount = 0;
-    for (const dl of discountLines) {
+    for (let i = 0; i < discountLines.length; i++) {
+      const dl = discountLines[i];
       const val = parseFloat(dl.discount_value) || 0;
       if (val < 0) {
         Alert.alert("Invalid", "Discount value cannot be negative");
@@ -2350,10 +2355,21 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         Alert.alert("Invalid", "Percentage cannot exceed 100%");
         return;
       }
-      totalDiscount += calcDiscountLineAmt(dl);
+      const base = dl.rental_cost + dl.late_fee + dl.damage_charge;
+      const discAmt = calcDiscountLineAmt(dl);
+      if (dl.discount_type === "fixed" && val > base) {
+        Alert.alert("Invalid", `Discount ($${val.toFixed(2)}) for "${dl.tool_name}" exceeds its total ($${base.toFixed(2)}). Discount cannot be more than the original amount.`);
+        return;
+      }
+      totalDiscount += discAmt;
     }
     if (totalDiscount <= 0) {
       Alert.alert("Invalid", "Enter discount for at least one line");
+      return;
+    }
+    const grandBase = discountLines.reduce((s, dl) => s + dl.rental_cost + dl.late_fee + dl.damage_charge, 0);
+    if (totalDiscount > grandBase) {
+      Alert.alert("Invalid", `Total discount ($${totalDiscount.toFixed(2)}) exceeds the total amount ($${grandBase.toFixed(2)}). Discount cannot be more than the original amount.`);
       return;
     }
     // Apply locally and close modal immediately for snappy UI
@@ -2571,8 +2587,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 )}
 
                 {/* TOTAL MODE: Single discount input distributed to all lines */}
-                {discountMode === "total" && discountLines.length > 1 && (
-                  <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: "#FFE0B2", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                {discountMode === "total" && discountLines.length > 1 && (() => {
+                  const grandBase = discountLines.reduce((s, dl) => s + dl.rental_cost + dl.late_fee + dl.damage_charge, 0);
+                  const totalVal = parseFloat(totalDiscountValue) || 0;
+                  const totalExceeds = totalDiscountType === "fixed" ? totalVal > grandBase : totalVal > 100;
+                  return (
+                  <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: totalExceeds ? "#F44336" : "#FFE0B2", borderRadius: 10, padding: 14, marginBottom: 14 }}>
                     <Text style={{ fontSize: 13, fontWeight: "700", color: "#E65100", marginBottom: 10 }}>TOTAL PRODUCT DISCOUNT</Text>
 
                     {/* Type Toggle */}
@@ -2593,9 +2613,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
                     {/* Value Input */}
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, backgroundColor: "#fafafa" }}>
-                        <View style={{ paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#FFF3E0", borderTopLeftRadius: 7, borderBottomLeftRadius: 7 }}>
-                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#FF9800" }}>{totalDiscountType === "percentage" ? "%" : "$"}</Text>
+                      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: totalExceeds ? "#F44336" : "#ddd", borderRadius: 8, backgroundColor: totalExceeds ? "#FFF0F0" : "#fafafa" }}>
+                        <View style={{ paddingHorizontal: 10, paddingVertical: 8, backgroundColor: totalExceeds ? "#FFCDD2" : "#FFF3E0", borderTopLeftRadius: 7, borderBottomLeftRadius: 7 }}>
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: totalExceeds ? "#F44336" : "#FF9800" }}>{totalDiscountType === "percentage" ? "%" : "$"}</Text>
                         </View>
                         <RNTextInput
                           placeholder="0"
@@ -2603,7 +2623,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                           value={totalDiscountValue}
                           onChangeText={(t) => handleTotalDiscountChange("value", t)}
                           keyboardType="decimal-pad"
-                          style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: "#333" }}
+                          style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: totalExceeds ? "#F44336" : "#333" }}
                         />
                       </View>
                       <View style={{ marginLeft: 10, alignItems: "flex-end" }}>
@@ -2613,8 +2633,14 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                         </Text>
                       </View>
                     </View>
+                    {totalExceeds && (
+                      <Text style={{ fontSize: 11, color: "#F44336", fontWeight: "600", marginTop: 6 }}>
+                        Discount exceeds total amount (${grandBase.toFixed(2)}). Must be less than original amount.
+                      </Text>
+                    )}
                   </View>
-                )}
+                  );
+                })()}
 
                 {/* Line Breakdown (always shown - readonly in total mode, editable in separate mode) */}
                 <Text style={styles.modalSection}>
@@ -2625,6 +2651,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   const lineTotal = dl.rental_cost + dl.late_fee + dl.damage_charge;
                   const discAmt = calcDiscountLineAmt(dl);
                   const isTotalMode = discountMode === "total" && discountLines.length > 1;
+                  const dlVal = parseFloat(dl.discount_value) || 0;
+                  const lineExceeds = dl.discount_type === "fixed" ? dlVal > lineTotal : dlVal > 100;
                   return (
                     <View key={idx} style={[styles.modalToolCard, { marginBottom: 12 }]}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
@@ -2667,9 +2695,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                           </View>
 
                           <View style={{ flexDirection: "row", alignItems: "center" }}>
-                            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, backgroundColor: "#fafafa" }}>
-                              <View style={{ paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#FFF3E0", borderTopLeftRadius: 7, borderBottomLeftRadius: 7 }}>
-                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#FF9800" }}>{dl.discount_type === "percentage" ? "%" : "$"}</Text>
+                            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: lineExceeds ? "#F44336" : "#ddd", borderRadius: 8, backgroundColor: lineExceeds ? "#FFF0F0" : "#fafafa" }}>
+                              <View style={{ paddingHorizontal: 10, paddingVertical: 8, backgroundColor: lineExceeds ? "#FFCDD2" : "#FFF3E0", borderTopLeftRadius: 7, borderBottomLeftRadius: 7 }}>
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: lineExceeds ? "#F44336" : "#FF9800" }}>{dl.discount_type === "percentage" ? "%" : "$"}</Text>
                               </View>
                               <RNTextInput
                                 placeholder="0"
@@ -2677,7 +2705,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                                 value={dl.discount_value && dl.discount_value !== "0" && dl.discount_value !== "0.00" ? dl.discount_value : ""}
                                 onChangeText={(t) => updateDiscountLine(idx, "discount_value", t)}
                                 keyboardType="decimal-pad"
-                                style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: "#333" }}
+                                style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: lineExceeds ? "#F44336" : "#333" }}
                               />
                             </View>
                             <View style={{ marginLeft: 10, alignItems: "flex-end" }}>
@@ -2686,6 +2714,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                               <Text style={{ fontSize: 11, color: "#4CAF50" }}>Final: ${(lineTotal - discAmt).toFixed(2)}</Text>
                             </View>
                           </View>
+                          {lineExceeds && (
+                            <Text style={{ fontSize: 11, color: "#F44336", fontWeight: "600", marginTop: 4 }}>
+                              Discount exceeds total (${lineTotal.toFixed(2)}). Must be less than original amount.
+                            </Text>
+                          )}
                         </>
                       )}
                     </View>

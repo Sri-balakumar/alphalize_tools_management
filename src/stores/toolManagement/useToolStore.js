@@ -21,6 +21,14 @@ import {
   openCheckinWizard as apiCheckinOrder,
 } from "@api/services/odooService";
 
+// Staleness threshold: skip re-fetch if data was fetched within this window
+const STALE_MS = 30000; // 30 seconds
+const _lastFetch = { categories: 0, tools: 0, orders: 0, customers: 0, pricingRules: 0, toolReport: 0, all: 0 };
+const isFresh = (key) => Date.now() - _lastFetch[key] < STALE_MS;
+const markFetched = (key) => { _lastFetch[key] = Date.now(); };
+// Force next fetch to always hit network (called after mutations)
+const invalidate = (key) => { _lastFetch[key] = 0; };
+
 const useToolStore = create(
   persist(
     (set, get) => ({
@@ -38,7 +46,8 @@ const useToolStore = create(
       // =============================================
       // FETCH ALL DATA FROM ODOO
       // =============================================
-      fetchAllData: async (auth) => {
+      fetchAllData: async (auth, force) => {
+        if (!force && isFresh("all")) return;
         set({ loading: true, error: null });
         try {
           const [categories, tools, orders, customers, pricingRules] =
@@ -50,61 +59,75 @@ const useToolStore = create(
               fetchPricingRules(auth).catch(() => []),
             ]);
           set({ categories, tools, orders, customers, pricingRules, loading: false });
+          markFetched("all"); markFetched("categories"); markFetched("tools");
+          markFetched("orders"); markFetched("customers"); markFetched("pricingRules");
         } catch (error) {
           set({ error: error.message, loading: false });
         }
       },
 
-      // Fetch individual models
-      fetchCategories: async (auth) => {
+      // Fetch individual models (skip if fresh)
+      fetchCategories: async (auth, force) => {
+        if (!force && isFresh("categories")) return;
         try {
           const categories = await fetchCategories(auth);
           set({ categories });
+          markFetched("categories");
         } catch (e) {
           console.warn("fetchCategories error:", e.message);
         }
       },
 
-      fetchTools: async (auth) => {
+      fetchTools: async (auth, force) => {
+        if (!force && isFresh("tools")) return;
         try {
           const tools = await fetchTools(auth);
           set({ tools });
+          markFetched("tools");
         } catch (e) {
           console.warn("fetchTools error:", e.message);
         }
       },
 
-      fetchOrders: async (auth) => {
+      fetchOrders: async (auth, force) => {
+        if (!force && isFresh("orders")) return;
         try {
           const orders = await fetchOrders(auth);
           set({ orders });
+          markFetched("orders");
         } catch (e) {
           console.warn("fetchOrders error:", e.message);
         }
       },
 
-      fetchCustomers: async (auth) => {
+      fetchCustomers: async (auth, force) => {
+        if (!force && isFresh("customers")) return;
         try {
           const customers = await fetchCustomers(auth);
           set({ customers });
+          markFetched("customers");
         } catch (e) {
           console.warn("fetchCustomers error:", e.message);
         }
       },
 
-      fetchPricingRules: async (auth) => {
+      fetchPricingRules: async (auth, force) => {
+        if (!force && isFresh("pricingRules")) return;
         try {
           const pricingRules = await fetchPricingRules(auth);
           set({ pricingRules });
+          markFetched("pricingRules");
         } catch (e) {
           console.warn("fetchPricingRules error:", e.message);
         }
       },
 
-      fetchToolReport: async (auth) => {
+      fetchToolReport: async (auth, force) => {
+        if (!force && isFresh("toolReport")) return;
         try {
           const toolReport = await fetchToolReport(auth);
           set({ toolReport });
+          markFetched("toolReport");
         } catch (e) {
           console.warn("fetchToolReport error:", e.message);
         }
@@ -115,13 +138,15 @@ const useToolStore = create(
       // =============================================
       addTool: async (auth, values) => {
         const newId = await apiCreateTool(auth, values);
-        await get().fetchTools(auth);
+        invalidate("tools");
+        await get().fetchTools(auth, true);
         return newId;
       },
 
       updateTool: async (auth, id, values) => {
         await apiUpdateTool(auth, id, values);
-        await get().fetchTools(auth);
+        invalidate("tools");
+        await get().fetchTools(auth, true);
       },
 
       getToolsByCategory: (categoryId) => {
@@ -134,43 +159,51 @@ const useToolStore = create(
       // =============================================
       addOrder: async (auth, values, lines) => {
         const newId = await apiCreateOrder(auth, values, lines);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
         return newId;
       },
 
       updateOrder: async (auth, id, values) => {
         await apiUpdateOrder(auth, id, values);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       confirmOrder: async (auth, id) => {
         await apiConfirmOrder(auth, id);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       cancelOrder: async (auth, id) => {
         await apiCancelOrder(auth, id);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       markDone: async (auth, id) => {
         await apiMarkDone(auth, id);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       createInvoice: async (auth, id) => {
         await apiCreateInvoice(auth, id);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       checkoutOrder: async (auth, id) => {
         await apiCheckoutOrder(auth, id);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       checkinOrder: async (auth, id) => {
         await apiCheckinOrder(auth, id);
-        await get().fetchOrders(auth);
+        invalidate("orders");
+        await get().fetchOrders(auth, true);
       },
 
       // =============================================
@@ -178,7 +211,8 @@ const useToolStore = create(
       // =============================================
       addCustomer: async (auth, values) => {
         const newId = await apiCreateCustomer(auth, values);
-        await get().fetchCustomers(auth);
+        invalidate("customers");
+        await get().fetchCustomers(auth, true);
         return newId;
       },
 
@@ -189,7 +223,8 @@ const useToolStore = create(
         return get().tools.filter((t) => t.category_id === categoryId).length;
       },
 
-      clearData: () =>
+      clearData: () => {
+        Object.keys(_lastFetch).forEach((k) => { _lastFetch[k] = 0; });
         set({
           categories: [],
           tools: [],
@@ -198,7 +233,8 @@ const useToolStore = create(
           pricingRules: [],
           toolReport: [],
           error: null,
-        }),
+        });
+      },
     }),
     {
       name: "tool-management-storage",

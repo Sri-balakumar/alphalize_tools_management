@@ -43,11 +43,8 @@ const RentalOrdersScreen = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
-      if (odooAuth) {
-        setRefreshing(true);
-        fetchOrders(odooAuth).finally(() => setRefreshing(false));
-      }
-    }, [odooAuth, fetchOrders])
+      if (odooAuth) fetchOrders(odooAuth);
+    }, [odooAuth])
   );
 
   const filteredOrders =
@@ -201,7 +198,7 @@ const RentalOrdersScreen = ({ navigation }) => {
           onRefresh={() => {
             if (odooAuth) {
               setRefreshing(true);
-              fetchOrders(odooAuth).finally(() => setRefreshing(false));
+              fetchOrders(odooAuth, true).finally(() => setRefreshing(false));
             }
           }}
         />

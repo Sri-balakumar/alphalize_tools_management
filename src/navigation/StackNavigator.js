@@ -28,7 +28,7 @@ const StackNavigator = () => {
   return (
     <Stack.Navigator
       initialRouteName={isLoggedIn ? "AppNavigator" : "LoginScreen"}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, animation: "fade" }}
     >
       {/* Auth */}
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
