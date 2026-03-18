@@ -226,7 +226,7 @@ const CustomersScreen = ({ navigation }) => {
         <Text style={styles.rentalLabel}>Rentals</Text>
         {item.total_revenue > 0 && (
           <Text style={styles.revenueText}>
-            ${parseFloat(item.total_revenue).toFixed(0)}
+            ر.ع.{parseFloat(item.total_revenue).toFixed(3)}
           </Text>
         )}
       </View>
