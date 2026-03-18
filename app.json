@@ -22,6 +22,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -33,8 +34,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "4c5eecd2-f26a-44ce-a69c-212745f2d057"
+        "projectId": "e25de47e-48bd-4101-aed2-5826e5056844"
       }
-    }
+    },
+    "owner": "sribalakumarr"
   }
 }

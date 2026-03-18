@@ -13,6 +13,8 @@ import {
   TextInput as RNTextInput,
   ActivityIndicator,
   Switch,
+  Modal,
+  FlatList,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 
@@ -285,35 +287,51 @@ const LoginScreen = ({ navigation }) => {
                     )}
                   </TouchableOpacity>
                   <View style={styles.underline} />
-                  {showDbDropdown && databases.length > 0 && (
-                    <View style={styles.dropdownList}>
-                      {databases.map((db) => (
-                        <TouchableOpacity
-                          key={db}
-                          style={[
-                            styles.dropdownItem,
-                            inputs.database === db && styles.dropdownItemActive,
-                          ]}
-                          onPress={() => {
-                            handleOnchange(db, "database");
-                            setShowDbDropdown(false);
-                          }}
-                        >
-                          <Text
-                            style={[
-                              styles.dropdownItemText,
-                              inputs.database === db && styles.dropdownItemTextActive,
-                            ]}
-                          >
-                            {db}
-                          </Text>
-                          {inputs.database === db && (
-                            <MaterialIcons name="check" size={18} color={COLORS.primaryThemeColor} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
+                  <Modal
+                    visible={showDbDropdown}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowDbDropdown(false)}
+                  >
+                    <TouchableWithoutFeedback onPress={() => setShowDbDropdown(false)}>
+                      <View style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                          <View style={styles.modalDropdown}>
+                            <Text style={styles.modalDropdownTitle}>Select Database</Text>
+                            <FlatList
+                              data={databases}
+                              keyExtractor={(item) => item}
+                              style={{ maxHeight: 300 }}
+                              renderItem={({ item: db }) => (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.dropdownItem,
+                                    inputs.database === db && styles.dropdownItemActive,
+                                  ]}
+                                  onPress={() => {
+                                    handleOnchange(db, "database");
+                                    setShowDbDropdown(false);
+                                  }}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.dropdownItemText,
+                                      inputs.database === db && styles.dropdownItemTextActive,
+                                    ]}
+                                  >
+                                    {db}
+                                  </Text>
+                                  {inputs.database === db && (
+                                    <MaterialIcons name="check" size={18} color={COLORS.primaryThemeColor} />
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                            />
+                          </View>
+                        </TouchableWithoutFeedback>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </Modal>
                   {errors.database && <Text style={styles.errorText}>{errors.database}</Text>}
                   {databases.length === 0 && !loadingDbs && (
                     <Text style={styles.hint}>No databases found. Check server URL.</Text>
@@ -474,6 +492,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONT_FAMILY.urbanistSemiBold,
     color: COLORS.black,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  modalDropdown: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  modalDropdownTitle: {
+    fontSize: 14,
+    fontFamily: FONT_FAMILY.urbanistSemiBold,
+    color: "#555",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
   dropdownList: {
     position: "absolute",
