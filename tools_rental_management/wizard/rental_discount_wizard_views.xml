@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_rental_discount_wizard_form" model="ir.ui.view">
+        <field name="name">rental.discount.wizard.form</field>
+        <field name="model">rental.discount.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Apply Discount">
+                <field name="page" invisible="1"/>
+                <field name="order_id" invisible="1"/>
+                <field name="currency_id" invisible="1"/>
+                <field name="line_count" invisible="1"/>
+
+                <!-- ═══ PAGE 1: Authorization ═══ -->
+                <div invisible="page != '1'">
+                    <div class="alert alert-info text-center" role="alert">
+                        <strong>Discount Authorization</strong>
+                        — Please provide the authorized person's details
+                        before applying any discount.
+                    </div>
+                    <group>
+                        <group>
+                            <field name="authorized_name"
+                                   placeholder="Full name of authorized person..."
+                                   required="page == '1'"/>
+                        </group>
+                        <group/>
+                    </group>
+                    <separator string="Authorized Person Photo (Required — Camera Only)"/>
+                    <group>
+                        <field name="authorized_photo"
+                               widget="camera_file_upload"
+                               nolabel="1" colspan="2"/>
+                    </group>
+                    <separator string="Authorized Person Signature (Required)"/>
+                    <group>
+                        <field name="authorized_signature"
+                               widget="signature" nolabel="1"/>
+                    </group>
+                </div>
+
+                <!-- ═══ PAGE 2: Discount Entry ═══ -->
+                <div invisible="page != '2'">
+
+                    <!-- Discount Mode Selector (only when more than 1 product) -->
+                    <div invisible="line_count &lt;= 1">
+                        <div class="alert alert-primary text-center" role="alert"
+                             style="padding: 12px 16px;">
+                            <strong>Choose Discount Method</strong>
+                            — Apply discount to all products at once, or set individually.
+                        </div>
+                        <group>
+                            <group>
+                                <field name="discount_mode" widget="radio"
+                                       string="Discount Method"/>
+                            </group>
+                            <group/>
+                        </group>
+                    </div>
+
+                    <!-- Total Product Discount section (visible when mode is 'total' and more than 1 product) -->
+                    <div invisible="discount_mode != 'total' or line_count &lt;= 1">
+                        <div class="alert alert-success text-center" role="alert">
+                            <strong>Total Product Discount</strong>
+                            — Enter a single discount to apply across all products.
+                        </div>
+                        <group>
+                            <group>
+                                <field name="total_discount_type" string="Discount Type"
+                                       widget="radio"/>
+                                <field name="total_discount_value" string="Discount Value"/>
+                            </group>
+                            <group>
+                                <field name="total_discount" readonly="1"
+                                       string="Calculated Discount"
+                                       class="oe_subtotal_footer_separator"/>
+                            </group>
+                        </group>
+                        <separator string="Discount Breakdown (Auto-Calculated)"/>
+                        <field name="line_ids">
+                            <list editable="bottom" no_open="1"
+                                  create="false" delete="false">
+                                <field name="order_line_id" column_invisible="1"/>
+                                <field name="tool_id" readonly="1" string="Tool"/>
+                                <field name="serial_number" string="Serial No."
+                                       readonly="1"/>
+                                <field name="rental_cost" string="Rental Cost"
+                                       readonly="1"/>
+                                <field name="late_fee" string="Late Fee"
+                                       readonly="1"
+                                       decoration-danger="late_fee > 0"/>
+                                <field name="damage_charge" string="Damage"
+                                       readonly="1"
+                                       decoration-danger="damage_charge > 0"/>
+                                <field name="line_total_before" string="Total"
+                                       readonly="1"/>
+                                <field name="discount_amount" string="Discount"
+                                       readonly="1"
+                                       decoration-success="discount_amount > 0"/>
+                                <field name="final_amount" string="Final Amount"
+                                       readonly="1"/>
+                                <field name="discount_type" column_invisible="1"/>
+                                <field name="discount_value" column_invisible="1"/>
+                                <field name="currency_id" column_invisible="1"/>
+                            </list>
+                        </field>
+                    </div>
+
+                    <!-- Separate Product Discount section (visible when mode is 'separate' OR single product) -->
+                    <div invisible="discount_mode == 'total' and line_count &gt; 1">
+                        <div class="alert alert-success text-center" role="alert">
+                            <strong>Enter Discount</strong>
+                            — Choose percentage or fixed amount for each tool.
+                        </div>
+                        <field name="line_ids">
+                            <list editable="bottom" no_open="1"
+                                  create="false" delete="false">
+                                <field name="order_line_id" column_invisible="1"/>
+                                <field name="tool_id" readonly="1" string="Tool"/>
+                                <field name="serial_number" string="Serial No."
+                                       readonly="1"/>
+                                <field name="rental_cost" string="Rental Cost"
+                                       readonly="1"/>
+                                <field name="late_fee" string="Late Fee"
+                                       readonly="1"
+                                       decoration-danger="late_fee > 0"/>
+                                <field name="damage_charge" string="Damage"
+                                       readonly="1"
+                                       decoration-danger="damage_charge > 0"/>
+                                <field name="line_total_before" string="Total"
+                                       readonly="1"/>
+                                <field name="discount_type" string="Disc. Type"/>
+                                <field name="discount_value" string="Disc. Value"/>
+                                <field name="discount_amount" string="Discount"
+                                       readonly="1"
+                                       decoration-success="discount_amount > 0"/>
+                                <field name="final_amount" string="Final Amount"
+                                       readonly="1"/>
+                                <field name="currency_id" column_invisible="1"/>
+                            </list>
+                        </field>
+                    </div>
+
+                    <!-- Total Discount Summary -->
+                    <group>
+                        <group/>
+                        <group>
+                            <field name="total_discount" readonly="1"
+                                   string="Total Discount"
+                                   class="oe_subtotal_footer_separator"/>
+                        </group>
+                    </group>
+                </div>
+
+                <!-- ═══ FOOTER ═══ -->
+                <footer>
+                    <button name="action_next" type="object"
+                            string="Next →  Enter Discounts"
+                            class="btn-primary"
+                            invisible="page != '1'"/>
+                    <button name="action_back" type="object"
+                            string="← Back"
+                            class="btn-secondary"
+                            invisible="page != '2'"/>
+                    <button name="action_apply_discount" type="object"
+                            string="✓ Apply Discount"
+                            class="btn-primary"
+                            invisible="page != '2'"/>
+                    <button string="Cancel" class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

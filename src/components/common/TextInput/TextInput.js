@@ -17,10 +17,12 @@ const TextInput = ({
   onFocus = () => {},
   ...props
 }) => {
+  const inputRef = React.useRef(null);
   const [hidePassword, setHidePassword] = React.useState(password);
   const [isFocused, setIsFocused] = React.useState(false);
 
   const handlePress = () => {
+    if (inputRef.current) inputRef.current.focus();
     if (onFocus) onFocus();
     if (onPress) onPress();
   };
@@ -47,6 +49,7 @@ const TextInput = ({
           ]}
         >
           <RNTextInput
+            ref={inputRef}
             autoCorrect={false}
             onFocus={() => {
               onFocus();

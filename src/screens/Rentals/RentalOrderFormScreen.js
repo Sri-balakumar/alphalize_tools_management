@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -29,7 +29,7 @@ import { Asset } from "expo-asset";
 import SignaturePad from "@components/common/SignaturePad/SignaturePad";
 import CameraCapture from "@components/common/CameraCapture/CameraCapture";
 import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails } from "@api/services/odooService";
-import { isEmail, isPhone } from "@utils/validation/validation";
+import { isEmail, isPhone, getPhoneLength, getEmailSuggestion } from "@utils/validation/validation";
 
 const PERIOD_TYPES = [
   { label: "Daily", value: "day" },
@@ -291,12 +291,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     { code: "+263", name: "Zimbabwe" },
   ];
 
-  const filteredCountryCodes = countrySearch.trim()
+  const filteredCountryCodes = useMemo(() => countrySearch.trim()
     ? COUNTRY_CODES.filter((c) =>
         c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
         c.code.includes(countrySearch)
       )
-    : COUNTRY_CODES;
+    : COUNTRY_CODES, [countrySearch]);
 
   // Split a full phone like "+919074837168" into { code: "+91", local: "9074837168" }
   const splitPhoneCountryCode = (fullPhone) => {
@@ -340,17 +340,17 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     if (field === "rental_period_type") {
       const newDuration = PERIOD_DURATION_MAP[value] || "1";
       setForm((prev) => ({ ...prev, rental_period_type: value, rental_duration: newDuration }));
-      setLines((prev) => prev.map((l) => ({ ...l, planned_duration: newDuration })));
+      setLines((prev) => prev.map((l) => ({ ...l, period_type: value, planned_duration: newDuration })));
       setErrors((prev) => ({ ...prev, rental_period_type: null }));
       return;
     }
 
-    // Special handling for phone number - limit to 10 digits only
+    // Special handling for phone number - limit digits based on country code
     if (field === "partner_phone") {
       const digitsOnly = value.replace(/\D/g, "");
-      // Only allow input if it has 10 or fewer digits
-      if (digitsOnly.length > 10) {
-        return; // Don't update if more than 10 digits
+      const maxDigits = getPhoneLength(countryCode);
+      if (digitsOnly.length > maxDigits) {
+        return;
       }
     }
 
@@ -394,6 +394,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     setIsNewCustomer(false);
     setShowCustomerDropdown(false);
   };
+
+  const LINE_DAY_MULTIPLIERS = { day: 1, week: 7, month: 30 };
 
   // ---------- TOOL AUTOCOMPLETE ----------
   const getFilteredTools = (searchText) => {
@@ -445,7 +447,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       const price = parseFloat(updated[index].unit_price) || 0;
       const dur = parseFloat(updated[index].planned_duration) || 1;
       const qty = parseFloat(updated[index].quantity) || 1;
-      updated[index].line_total = (price * dur * qty).toFixed(3);
+      const multiplier = LINE_DAY_MULTIPLIERS[updated[index].period_type || form.rental_period_type || "day"] || 1;
+      updated[index].line_total = (price * dur * multiplier * qty).toFixed(3);
       return updated;
     });
     setActiveToolLineIdx(-1);
@@ -480,13 +483,26 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     ]);
   };
 
-  const LINE_DAY_MULTIPLIERS = { day: 1, week: 7, month: 30 };
-
   const updateLine = (index, field, value) => {
+    // When per-line period_type changes, also update the order header
+    if (field === "period_type") {
+      setForm((prev) => ({ ...prev, rental_period_type: value }));
+      // Update all lines to same period type
+      setLines((prev) => prev.map((l, i) => {
+        const updated = i === index ? { ...l, period_type: value } : { ...l, period_type: value };
+        const price = parseFloat(updated.unit_price) || 0;
+        const dur = parseFloat(updated.planned_duration) || 1;
+        const qty = parseFloat(updated.quantity) || 1;
+        const multiplier = LINE_DAY_MULTIPLIERS[value] || 1;
+        updated.line_total = (price * dur * multiplier * qty).toFixed(3);
+        return updated;
+      }));
+      return;
+    }
     setLines((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-      if (["unit_price", "planned_duration", "quantity"].includes(field) || field === "period_type") {
+      if (["unit_price", "planned_duration", "quantity"].includes(field)) {
         const l = updated[index];
         const price = parseFloat(l.unit_price) || 0;
         const dur = parseFloat(l.planned_duration) || 1;
@@ -580,6 +596,20 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     (async () => {
       try {
         if (odooOrderId && odooAuth) {
+          // Update order header with latest period type and duration
+          await updateOrderValues(odooAuth, odooOrderId, {
+            rental_period_type: form.rental_period_type,
+            rental_duration: parseFloat(form.rental_duration) || 1,
+          });
+          // Update each line's period_type and planned_duration
+          await Promise.all(lines.map((l) => {
+            if (!l.odoo_id) return null;
+            return updateOrderLineValues(odooAuth, l.odoo_id, {
+              period_type: l.period_type || form.rental_period_type,
+              planned_duration: parseFloat(l.planned_duration) || parseFloat(form.rental_duration) || 1,
+              unit_price: parseFloat(l.unit_price) || 0,
+            });
+          }).filter(Boolean));
           await storeConfirmOrder(odooAuth, odooOrderId);
           showToastMessage("Order confirmed");
           return;
@@ -863,7 +893,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         if (Object.keys(checkinVals).length > 0) {
           await updateOrderValues(odooAuth, odooOrderId, checkinVals);
         }
-        // Save line photos, conditions, late fee & returned_qty for VISIBLE lines only
+        // Save line photos, conditions, late fee, damage & returned_qty for VISIBLE lines only
+        const totalDamageCharges = visibleLines.reduce((sum, l) => sum + (parseFloat(l.damage_charge) || 0), 0);
+        // Update order-level damage_charges
+        if (totalDamageCharges > 0) {
+          await updateOrderValues(odooAuth, odooOrderId, { damage_charges: totalDamageCharges });
+        }
         await Promise.all(lines.map((line, i) => {
           if (checkinExcludedIdx.includes(i)) return null;
           const lineOdooId = line.odoo_id;
@@ -871,6 +906,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           const updateVals = { checkin_condition: line.checkin_condition };
           const lateFeeAmt = parseFloat(line.late_fee_amount) || 0;
           if (lateFeeAmt > 0) updateVals.late_fee_amount = lateFeeAmt;
+          const dmgCharge = parseFloat(line.damage_charge) || 0;
+          if (dmgCharge > 0) updateVals.damage_charge = dmgCharge;
+          if (line.damage_note) updateVals.damage_note = line.damage_note;
           if (checkinLineB64s[i]) updateVals.checkin_tool_image = checkinLineB64s[i];
           // For partial: mark this line as returned
           if (isPartial) updateVals.returned_qty = 1;
@@ -1073,7 +1111,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       ${isCheckin ? `<tr>
         <td><strong>Check-In Date:</strong></td>
         <td>${form.date_checkin || "-"}</td>
-        <td><strong>Duration (Days):</strong></td>
+        <td><strong>Duration (${({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days"}):</strong></td>
         <td>${form.rental_duration || "1"}</td>
       </tr>
       <tr>
@@ -1082,7 +1120,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td><strong>Advance:</strong></td>
         <td>${cur}${advance.toFixed(3)}</td>
       </tr>` : `<tr>
-        <td><strong>Duration (Days):</strong></td>
+        <td><strong>Duration (${({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days"}):</strong></td>
         <td>${form.rental_duration || "1"}</td>
         <td><strong>Advance:</strong></td>
         <td>${cur}${advance.toFixed(3)}</td>
@@ -1434,6 +1472,15 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         try {
           if (odooOrderId && odooAuth) {
             await updateOrder(odooAuth, odooOrderId, orderValues);
+            // Also update each line's period_type and planned_duration
+            await Promise.all(lines.map((l) => {
+              if (!l.odoo_id) return null;
+              return updateOrderLineValues(odooAuth, l.odoo_id, {
+                period_type: l.period_type || form.rental_period_type,
+                planned_duration: parseFloat(l.planned_duration) || parseFloat(form.rental_duration) || 1,
+                unit_price: parseFloat(l.unit_price) || 0,
+              });
+            }).filter(Boolean));
             showToastMessage("Order updated in Odoo");
           } else if (odooAuth) {
             await addOrder(odooAuth, orderValues, lineValues);
@@ -1465,7 +1512,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       return;
     }
 
-    const phoneValidationError = isPhone(form.partner_phone);
+    const phoneValidationError = isPhone(form.partner_phone, countryCode);
     setPhoneError(phoneValidationError);
 
     // Don't auto-save if validation fails
@@ -2321,7 +2368,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   <View style={ciStyles.durationRow}>
                     <Text style={ciStyles.infoLabel}>Total Duration</Text>
                     <Text style={[ciStyles.durationText, isLate && { color: "#E65100" }]}>
-                      {planned} {planned === 1 ? "Day" : "Days"}{isLate ? ` + ${extra} ${extra === 1 ? "Day" : "Days"} Extra` : ""}
+                      {planned} {planned === 1 ? (PERIOD_LABELS[form.rental_period_type] || "Day") : (({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days")}{isLate ? ` + ${extra} ${extra === 1 ? "Day" : "Days"} Extra` : ""}
                     </Text>
                   </View>
                 );
@@ -2698,13 +2745,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           if (sigB64) discountVals.discount_auth_signature = sigB64;
           if (photoB64) discountVals.discount_auth_photo = photoB64;
           await updateOrderValues(odooAuth, odooOrderId, discountVals);
-          await Promise.all(lines.map((l, i) => {
-            const dl = discountLines[i];
-            if (!dl || !l.odoo_id) return null;
-            return updateOrderLineValues(odooAuth, l.odoo_id, {
-              discount_type: dl.discount_type || false,
+          await Promise.all(discountLines.map((dl, i) => {
+            const lineOdooId = lines[i]?.odoo_id;
+            if (!lineOdooId || !dl.discount_type || !dl.discount_value) return null;
+            return updateOrderLineValues(odooAuth, lineOdooId, {
+              discount_type: dl.discount_type,
               discount_value: parseFloat(dl.discount_value) || 0,
-              discount_line_amount: calcDiscountLineAmt(dl),
             });
           }).filter(Boolean));
           showToastMessage("Discount applied: ر.ع." + totalDiscount.toFixed(3));
@@ -3219,7 +3265,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                   paddingHorizontal: 15,
                 }}>
                   <RNTextInput
-                    placeholder="Phone number (10 digits)"
+                    placeholder={`Phone number (${getPhoneLength(countryCode)} digits)`}
                     placeholderTextColor="#666666"
                     value={form.partner_phone}
                     onChangeText={(t) => handleChange("partner_phone", t)}
@@ -3244,6 +3290,24 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 column
               />
               {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+              {(() => {
+                const email = form.partner_email || "";
+                if (!email.length) return null;
+                const username = email.split("@")[0];
+                if (!username) return null;
+                const typoSuggestion = getEmailSuggestion(email);
+                const gmailFull = username + "@gmail.com";
+                const suggestion = typoSuggestion || (email !== gmailFull ? gmailFull : null);
+                if (!suggestion) return null;
+                return (
+                  <TouchableOpacity
+                    onPress={() => handleChange("partner_email", suggestion)}
+                    style={{ backgroundColor: "#1565C0", borderRadius: 6, paddingVertical: 8, paddingHorizontal: 14, marginTop: 6, alignSelf: "flex-start" }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Use {suggestion}</Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
 
             {form.customer_id ? (
@@ -4021,7 +4085,17 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               {filteredCountryCodes.map((item, idx) => (
                 <TouchableOpacity
                   key={item.name + idx}
-                  onPress={() => { setCountryCode(item.code); setShowCountryPicker(false); setCountrySearch(""); }}
+                  onPress={() => {
+                    setCountryCode(item.code);
+                    const maxDigits = getPhoneLength(item.code);
+                    const currentPhone = form.partner_phone?.replace(/\D/g, "") || "";
+                    if (currentPhone.length > maxDigits) {
+                      setForm((prev) => ({ ...prev, partner_phone: currentPhone.substring(0, maxDigits) }));
+                    }
+                    setPhoneError(null);
+                    setShowCountryPicker(false);
+                    setCountrySearch("");
+                  }}
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",

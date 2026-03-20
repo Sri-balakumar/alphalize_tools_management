@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_rental_add_product_wizard_form" model="ir.ui.view">
+        <field name="name">rental.add.product.wizard.form</field>
+        <field name="model">rental.add.product.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Add Products from Inventory">
+                <group>
+                    <field name="order_id" readonly="1"/>
+                </group>
+                <separator string="Select Products to Add"/>
+                <field name="line_ids">
+                    <list editable="bottom">
+                        <field name="product_id"
+                               options="{'no_create': True}"/>
+                        <field name="product_uom_qty" string="In Stock"/>
+                        <field name="quantity"/>
+                        <field name="price_unit" string="Price/Day"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_add_products" type="object"
+                            string="Add to Rental Order" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

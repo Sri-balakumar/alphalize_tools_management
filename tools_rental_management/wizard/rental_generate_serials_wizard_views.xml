@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_rental_generate_serials_wizard_form" model="ir.ui.view">
+        <field name="name">rental.generate.serials.wizard.form</field>
+        <field name="model">rental.generate.serials.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Generate Serialized Products">
+                <group>
+                    <group string="Product Details">
+                        <field name="template_product_id"
+                               options="{'no_create': True}"
+                               placeholder="(Optional) Copy from existing product..."/>
+                        <field name="product_name" placeholder="e.g. Drill Machine"/>
+                        <field name="list_price"/>
+                        <field name="late_fee_per_day"/>
+                        <field name="rental_category_id"/>
+                    </group>
+                    <group string="Serial Numbers">
+                        <field name="serial_numbers_text"
+                               placeholder="DRL-001&#10;DRL-002&#10;DRL-003"
+                               nolabel="1" colspan="2"/>
+                    </group>
+                </group>
+                <group invisible="product_count == 0">
+                    <group string="Preview">
+                        <field name="product_count" readonly="1"/>
+                        <field name="preview_text" readonly="1" nolabel="1"
+                               colspan="2" widget="text"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_generate" type="object"
+                            string="Generate Products" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open wizard from menu -->
+    <record id="action_rental_generate_serials" model="ir.actions.act_window">
+        <field name="name">Generate Serialized Products</field>
+        <field name="res_model">rental.generate.serials.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

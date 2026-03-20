@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   ScrollView,
   TextInput as RNTextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
@@ -18,7 +20,7 @@ import { COLORS, SPACING, BORDER_RADIUS } from "@constants/theme";
 import useToolStore from "@stores/toolManagement/useToolStore";
 import useAuthStore from "@stores/auth/useAuthStore";
 import { updateCustomer } from "@api/services/odooService";
-import { isEmail, isPhone } from "@utils/validation/validation";
+import { isEmail, isPhone, getPhoneLength, getEmailSuggestion } from "@utils/validation/validation";
 
 const COUNTRY_CODES = [
   { code: "+93", name: "Afghanistan" }, { code: "+355", name: "Albania" }, { code: "+213", name: "Algeria" },
@@ -106,19 +108,29 @@ const CustomersScreen = ({ navigation }) => {
   const [editEmail, setEditEmail] = useState("");
   const [editCountryCode, setEditCountryCode] = useState("+91");
   const [saving, setSaving] = useState(false);
-  const [phoneError, setPhoneError] = useState(null);
-  const [emailError, setEmailError] = useState(null);
 
   // Country picker state
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
 
-  const filteredCountryCodes = countrySearch.trim()
+  const filteredCountryCodes = useMemo(() => countrySearch.trim()
     ? COUNTRY_CODES.filter((c) =>
         c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
         c.code.includes(countrySearch)
       )
-    : COUNTRY_CODES;
+    : COUNTRY_CODES, [countrySearch]);
+
+  const phoneMaxDigits = useMemo(() => getPhoneLength(editCountryCode), [editCountryCode]);
+  const computedPhoneError = useMemo(() => editPhone.length > 0 && editPhone.length !== phoneMaxDigits
+    ? `Phone number must contain exactly ${phoneMaxDigits} digits`
+    : null, [editPhone, phoneMaxDigits]);
+  const computedEmailError = useMemo(() => editEmail.length > 0 ? isEmail(editEmail) : null, [editEmail]);
+  const emailSuggestion = useMemo(() => editEmail.length > 0 ? getEmailSuggestion(editEmail) : null, [editEmail]);
+  const emailAutoComplete = useMemo(() => {
+    const username = editEmail.split("@")[0];
+    return username.length > 0 && !editEmail.includes("@gmail.com") ? username + "@gmail.com" : null;
+  }, [editEmail]);
+  const isSaveDisabled = useMemo(() => saving || !editName.trim() || !!computedPhoneError || !!computedEmailError, [saving, editName, computedPhoneError, computedEmailError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,62 +156,32 @@ const CustomersScreen = ({ navigation }) => {
     setEditPhone(local);
     setEditCountryCode(code);
     setEditEmail(customer.email || "");
-    setPhoneError(null);
-    setEmailError(null);
     setShowEditModal(true);
   };
 
-  const handlePhoneChange = (text) => {
+  const handlePhoneChange = useCallback((text) => {
     const digitsOnly = text.replace(/\D/g, "");
-    if (digitsOnly.length > 10) return;
+    if (digitsOnly.length > phoneMaxDigits) return;
     setEditPhone(digitsOnly);
-    setPhoneError(null);
-  };
+  }, [phoneMaxDigits]);
 
-  const handleEmailChange = (text) => {
+  const handleEmailChange = useCallback((text) => {
     setEditEmail(text);
-    setEmailError(null);
-  };
+  }, []);
 
   const handleSave = async () => {
-    if (!editName.trim()) {
-      Alert.alert("Error", "Customer name is required");
-      return;
-    }
-
-    // Validate phone
-    if (editPhone) {
-      const pErr = isPhone(editPhone);
-      if (pErr) {
-        setPhoneError(pErr);
-        return;
-      }
-    }
-
-    // Validate email
-    if (editEmail) {
-      const eErr = isEmail(editEmail);
-      if (eErr) {
-        setEmailError(eErr);
-        return;
-      }
-    }
-
+    if (isSaveDisabled) return;
     if (!editCustomer || !odooAuth) return;
-    setSaving(true);
-    try {
-      await updateCustomer(odooAuth, editCustomer.odoo_id || parseInt(editCustomer.id), {
-        name: editName.trim(),
-        phone: editPhone ? editCountryCode + editPhone : "",
-        email: editEmail.trim(),
-      });
-      await fetchCustomers(odooAuth);
-      setShowEditModal(false);
-    } catch (e) {
+    setShowEditModal(false);
+    updateCustomer(odooAuth, editCustomer.odoo_id || parseInt(editCustomer.id), {
+      name: editName.trim(),
+      phone: editPhone ? editCountryCode + editPhone : "",
+      email: editEmail.trim(),
+    }).then(() => {
+      fetchCustomers(odooAuth);
+    }).catch((e) => {
       Alert.alert("Error", "Failed to update: " + e.message);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const renderCustomer = ({ item }) => (
@@ -268,71 +250,83 @@ const CustomersScreen = ({ navigation }) => {
 
       {/* Edit Customer Modal */}
       <Modal visible={showEditModal} animationType="fade" transparent onRequestClose={() => setShowEditModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Customer</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Text style={styles.modalClose}>X</Text>
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Edit Customer</Text>
+                  <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                    <Text style={styles.modalClose}>X</Text>
+                  </TouchableOpacity>
+                </View>
 
-            <Text style={styles.fieldLabel}>Name *</Text>
-            <RNTextInput
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Customer name"
-              placeholderTextColor="#999"
-              style={styles.input}
-            />
-
-            <Text style={styles.fieldLabel}>Phone</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <TouchableOpacity
-                onPress={() => setShowCountryPicker(true)}
-                style={styles.countryCodeBtn}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#333" }}>{editCountryCode}</Text>
-                <Text style={{ fontSize: 9, color: "#888", marginLeft: 5 }}>{"\u25BC"}</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Name *</Text>
                 <RNTextInput
-                  value={editPhone}
-                  onChangeText={handlePhoneChange}
-                  placeholder="Phone number (10 digits)"
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Customer name"
                   placeholderTextColor="#999"
-                  keyboardType="phone-pad"
                   style={styles.input}
                 />
-              </View>
+
+                <Text style={styles.fieldLabel}>Phone</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowCountryPicker(true)}
+                    style={styles.countryCodeBtn}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#333" }}>{editCountryCode}</Text>
+                    <Text style={{ fontSize: 9, color: "#888", marginLeft: 5 }}>{"\u25BC"}</Text>
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <RNTextInput
+                      value={editPhone}
+                      onChangeText={handlePhoneChange}
+                      placeholder={`Phone number (${getPhoneLength(editCountryCode)} digits)`}
+                      placeholderTextColor="#999"
+                      keyboardType="phone-pad"
+                      style={styles.input}
+                    />
+                  </View>
+                </View>
+                {computedPhoneError && <Text style={styles.errorText}>{computedPhoneError}</Text>}
+
+                <Text style={styles.fieldLabel}>Email</Text>
+                <RNTextInput
+                  value={editEmail}
+                  onChangeText={handleEmailChange}
+                  placeholder="Email address"
+                  placeholderTextColor="#999"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.input}
+                />
+                {computedEmailError && <Text style={styles.errorText}>{computedEmailError}</Text>}
+                {(emailSuggestion || emailAutoComplete) && (
+                  <TouchableOpacity
+                    onPress={() => setEditEmail(emailSuggestion || emailAutoComplete)}
+                    style={{ backgroundColor: "#1565C0", borderRadius: 6, paddingVertical: 8, paddingHorizontal: 14, marginTop: 6, alignSelf: "flex-start" }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Use {emailSuggestion || emailAutoComplete}</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  onPress={handleSave}
+                  disabled={isSaveDisabled}
+                  style={[styles.saveBtn, isSaveDisabled && { opacity: 0.4 }]}
+                >
+                  <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save"}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-            {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
-
-            <Text style={styles.fieldLabel}>Email</Text>
-            <RNTextInput
-              value={editEmail}
-              onChangeText={handleEmailChange}
-              placeholder="Email address"
-              placeholderTextColor="#999"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-            />
-            {emailError && <Text style={styles.errorText}>{emailError}</Text>}
-
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={saving}
-              style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            >
-              <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save"}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Country Code Picker Modal */}
@@ -352,7 +346,15 @@ const CustomersScreen = ({ navigation }) => {
               {filteredCountryCodes.map((item, idx) => (
                 <TouchableOpacity
                   key={item.name + idx}
-                  onPress={() => { setEditCountryCode(item.code); setShowCountryPicker(false); setCountrySearch(""); }}
+                  onPress={() => {
+                    setEditCountryCode(item.code);
+                    const maxDigits = getPhoneLength(item.code);
+                    if (editPhone.length > maxDigits) {
+                      setEditPhone(editPhone.substring(0, maxDigits));
+                    }
+                    setShowCountryPicker(false);
+                    setCountrySearch("");
+                  }}
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",

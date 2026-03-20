@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+    <t t-name="tools_rental_management.RentalToolReportDashboard">
+        <div class="rtr_dashboard o_action">
+
+            <!-- ── Header (sticky) ───────────────────────────── -->
+            <div class="rtr_header">
+                <h2>Tool Availability Report</h2>
+                <div class="rtr_header_actions">
+                    <button class="btn btn-success btn-sm me-2"
+                            t-on-click="onDownloadExcel">
+                        <i class="fa fa-file-excel-o me-1"/>Download Excel
+                    </button>
+                    <button class="btn btn-danger btn-sm"
+                            t-on-click="onDownloadPdf">
+                        <i class="fa fa-file-pdf-o me-1"/>Download PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── Scrollable content area ────────────────────── -->
+            <div class="rtr_scroll_area">
+
+                <!-- ── Summary Cards ──────────────────────────── -->
+                <div class="rtr_cards">
+                    <div class="rtr_card rtr_card_purple">
+                        <div class="rtr_card_value" t-esc="state.totalTools"/>
+                        <div class="rtr_card_label">Total Tools</div>
+                    </div>
+                    <div class="rtr_card rtr_card_green">
+                        <div class="rtr_card_value" t-esc="formatQty(state.totalAvailable)"/>
+                        <div class="rtr_card_label">Available</div>
+                    </div>
+                    <div class="rtr_card rtr_card_red">
+                        <div class="rtr_card_value" t-esc="formatQty(state.totalCheckedOut)"/>
+                        <div class="rtr_card_label">Checked Out</div>
+                    </div>
+                    <div class="rtr_card rtr_card_blue">
+                        <div class="rtr_card_value" t-esc="state.totalRentals"/>
+                        <div class="rtr_card_label">Total Rentals</div>
+                    </div>
+                    <div class="rtr_card rtr_card_orange">
+                        <div class="rtr_card_value" t-esc="formatMoney(state.totalRevenue)"/>
+                        <div class="rtr_card_label">Total Revenue</div>
+                    </div>
+                </div>
+
+                <!-- ── Filter Bar ─────────────────────────────── -->
+                <div class="rtr_filter_bar">
+                    <div class="rtr_filter_item">
+                        <i class="fa fa-search rtr_search_icon"/>
+                        <input type="text" class="rtr_search_input"
+                               placeholder="Search tools..."
+                               t-on-input="onSearchInput"
+                               t-att-value="state.searchQuery"/>
+                    </div>
+                    <div class="rtr_filter_item">
+                        <label>Status:</label>
+                        <select class="rtr_select" t-on-change="onFilterStatus">
+                            <option value="all">All</option>
+                            <option value="available">Available</option>
+                            <option value="rented">Rented</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="retired">Retired</option>
+                        </select>
+                    </div>
+                    <div class="rtr_filter_item">
+                        <label>Category:</label>
+                        <select class="rtr_select" t-on-change="onFilterCategory">
+                            <option value="all">All Categories</option>
+                            <t t-foreach="state.categories" t-as="cat" t-key="cat.id">
+                                <option t-att-value="cat.id" t-esc="cat.name"/>
+                            </t>
+                        </select>
+                    </div>
+                    <div class="rtr_filter_count">
+                        Showing <strong t-esc="state.records.length"/> tools
+                    </div>
+                </div>
+
+                <!-- ── Data Table ─────────────────────────────── -->
+                <div class="rtr_table_wrap">
+                    <table class="rtr_table">
+                        <thead>
+                            <tr>
+                                <th class="rtr_th_num">#</th>
+                                <th class="rtr_th_sortable rtr_th_name" t-on-click="() => this.onSort('name')">
+                                    Tool Name <i t-attf-class="fa {{ getSortIcon('name') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable" t-on-click="() => this.onSort('category_id')">
+                                    Category <i t-attf-class="fa {{ getSortIcon('category_id') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_center" t-on-click="() => this.onSort('state')">
+                                    Status <i t-attf-class="fa {{ getSortIcon('state') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('total_qty')">
+                                    Total Qty <i t-attf-class="fa {{ getSortIcon('total_qty') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('available_qty')">
+                                    Available <i t-attf-class="fa {{ getSortIcon('available_qty') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('checked_out_qty')">
+                                    Checked Out <i t-attf-class="fa {{ getSortIcon('checked_out_qty') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('active_rentals')">
+                                    Active Orders <i t-attf-class="fa {{ getSortIcon('active_rentals') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('total_rentals')">
+                                    Total Rentals <i t-attf-class="fa {{ getSortIcon('total_rentals') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('price_per_day')">
+                                    Price / Day <i t-attf-class="fa {{ getSortIcon('price_per_day') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('late_fee_per_day')">
+                                    Late Fee / Day <i t-attf-class="fa {{ getSortIcon('late_fee_per_day') }} rtr_sort_icon"/>
+                                </th>
+                                <th class="rtr_th_sortable rtr_th_right" t-on-click="() => this.onSort('total_revenue')">
+                                    Total Revenue <i t-attf-class="fa {{ getSortIcon('total_revenue') }} rtr_sort_icon"/>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="state.records" t-as="rec" t-key="rec.id">
+                                <tr>
+                                    <td class="rtr_td_num">
+                                        <t t-esc="rec_index + 1"/>
+                                    </td>
+                                    <td class="rtr_td_name">
+                                        <t t-esc="rec.name"/>
+                                    </td>
+                                    <td>
+                                        <t t-esc="rec.category_id ? rec.category_id[1] : ''"/>
+                                    </td>
+                                    <td class="rtr_td_center">
+                                        <span t-attf-class="rtr_badge {{ getStatusClass(rec.state) }}">
+                                            <t t-esc="getStatusLabel(rec.state)"/>
+                                        </span>
+                                    </td>
+                                    <td class="rtr_td_right">
+                                        <t t-esc="formatQty(rec.total_qty)"/>
+                                    </td>
+                                    <td class="rtr_td_right rtr_text_green">
+                                        <t t-esc="formatQty(rec.available_qty)"/>
+                                    </td>
+                                    <td class="rtr_td_right rtr_text_red">
+                                        <t t-esc="formatQty(rec.checked_out_qty)"/>
+                                    </td>
+                                    <td class="rtr_td_right">
+                                        <t t-esc="rec.active_rentals"/>
+                                    </td>
+                                    <td class="rtr_td_right">
+                                        <t t-esc="rec.total_rentals"/>
+                                    </td>
+                                    <td class="rtr_td_right">
+                                        <t t-esc="formatMoney(rec.price_per_day)"/>
+                                    </td>
+                                    <td class="rtr_td_right">
+                                        <t t-esc="formatMoney(rec.late_fee_per_day)"/>
+                                    </td>
+                                    <td class="rtr_td_right">
+                                        <t t-esc="formatMoney(rec.total_revenue)"/>
+                                    </td>
+                                </tr>
+                            </t>
+                            <t t-if="!state.records.length">
+                                <tr>
+                                    <td colspan="12" class="rtr_no_data">
+                                        No tools match your filters
+                                    </td>
+                                </tr>
+                            </t>
+                        </tbody>
+                        <tfoot t-if="state.records.length">
+                            <tr class="rtr_total_row">
+                                <td colspan="4" class="rtr_td_right">
+                                    <strong>TOTAL</strong>
+                                </td>
+                                <td class="rtr_td_right">
+                                    <strong t-esc="formatQty(state.totalQty)"/>
+                                </td>
+                                <td class="rtr_td_right rtr_text_green">
+                                    <strong t-esc="formatQty(state.totalAvailable)"/>
+                                </td>
+                                <td class="rtr_td_right rtr_text_red">
+                                    <strong t-esc="formatQty(state.totalCheckedOut)"/>
+                                </td>
+                                <td class="rtr_td_right">
+                                    <strong t-esc="state.totalActiveOrders"/>
+                                </td>
+                                <td class="rtr_td_right">
+                                    <strong t-esc="state.totalRentals"/>
+                                </td>
+                                <td colspan="2"/>
+                                <td class="rtr_td_right">
+                                    <strong t-esc="formatMoney(state.totalRevenue)"/>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="tools_rental_management.CameraWidget">
+        <div class="o_camera_file_widget">
+            <!-- Preview of captured / attached file -->
+            <div t-if="state.preview" class="mb-2">
+                <div class="position-relative d-inline-block">
+                    <img t-att-src="state.preview"
+                         style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6;
+                                border-radius: 6px; padding: 2px; object-fit: contain;"/>
+                    <button class="btn btn-sm btn-danger position-absolute"
+                            style="top: -8px; right: -8px; border-radius: 50%;
+                                   width: 22px; height: 22px; padding: 0;
+                                   line-height: 22px; font-size: 11px;"
+                            t-on-click="onRemove" title="Remove">
+                        <i class="fa fa-times"/>
+                    </button>
+                </div>
+                <div t-if="state.fileName" class="text-muted small mt-1">
+                    <t t-esc="state.fileName"/>
+                </div>
+            </div>
+            <!-- Action buttons -->
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-primary btn-sm"
+                        t-on-click="openCamera"
+                        t-att-disabled="props.readonly">
+                    <i class="fa fa-camera me-1"/> Open Camera
+                </button>
+                <button class="btn btn-outline-secondary btn-sm"
+                        t-on-click="openFilePicker"
+                        t-att-disabled="props.readonly">
+                    <i class="fa fa-paperclip me-1"/> Attach File
+                </button>
+            </div>
+        </div>
+    </t>
+</templates>

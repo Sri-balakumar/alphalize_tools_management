@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="seq_rental_order" model="ir.sequence">
+            <field name="name">Rental Order</field>
+            <field name="code">rental.order</field>
+            <field name="prefix">RNT/%(y)s/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+        <record id="seq_rental_customer" model="ir.sequence">
+            <field name="name">Rental Customer ID</field>
+            <field name="code">rental.customer</field>
+            <field name="prefix">CUS/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>

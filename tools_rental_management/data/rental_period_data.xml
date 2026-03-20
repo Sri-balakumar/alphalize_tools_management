@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Default Tool Categories -->
+        <record id="categ_power_tools" model="rental.tool.category">
+            <field name="name">Power Tools</field>
+            <field name="code">PWR</field>
+        </record>
+        <record id="categ_hand_tools" model="rental.tool.category">
+            <field name="name">Hand Tools</field>
+            <field name="code">HND</field>
+        </record>
+        <record id="categ_heavy_equipment" model="rental.tool.category">
+            <field name="name">Heavy Equipment</field>
+            <field name="code">HVY</field>
+        </record>
+        <record id="categ_measuring" model="rental.tool.category">
+            <field name="name">Measuring Instruments</field>
+            <field name="code">MSR</field>
+        </record>
+        <record id="categ_safety" model="rental.tool.category">
+            <field name="name">Safety Equipment</field>
+            <field name="code">SFT</field>
+        </record>
+        <record id="categ_garden" model="rental.tool.category">
+            <field name="name">Garden &amp; Landscaping</field>
+            <field name="code">GRD</field>
+        </record>
+        <record id="categ_cleaning" model="rental.tool.category">
+            <field name="name">Cleaning Equipment</field>
+            <field name="code">CLN</field>
+        </record>
+    </data>
+</odoo>
