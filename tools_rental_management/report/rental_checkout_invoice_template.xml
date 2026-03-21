@@ -86,14 +86,8 @@
                                 <td><span t-field="doc.date_checkout" t-options='{"widget": "date"}'/></td>
                             </tr>
                             <tr>
-                                <td><strong>Billing Period:</strong></td>
-                                <td><span t-field="doc.rental_period_type"/></td>
-                                <td><strong>Duration (<t t-if="doc.rental_period_type == 'week'">Weeks</t><t t-elif="doc.rental_period_type == 'month'">Months</t><t t-else="">Days</t>):</strong></td>
-                                <td><span t-esc="int(doc.rental_duration)"/></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Planned Return:</strong></td>
-                                <td><span t-field="doc.date_planned_checkin"/></td>
+                                <td></td>
+                                <td></td>
                                 <td><strong>Advance Collected:</strong></td>
                                 <td><span t-field="doc.advance_amount"/></td>
                             </tr>
@@ -114,17 +108,8 @@
                                     <th>Tool</th>
                                     <th>Serial No.</th>
                                     <th>Condition</th>
-                                    <th class="text-end">
-                                        Price/
-                                        <t t-if="doc.rental_period_type == 'week'">Week</t>
-                                        <t t-elif="doc.rental_period_type == 'month'">Month</t>
-                                        <t t-else="">Day</t>
-                                    </th>
-                                    <th class="text-end">
-                                        <t t-if="doc.rental_period_type == 'week'">Weeks</t>
-                                        <t t-elif="doc.rental_period_type == 'month'">Months</t>
-                                        <t t-else="">Days</t>
-                                    </th>
+                                    <th class="text-end">Price</th>
+                                    <th class="text-end">Duration</th>
                                     <th class="text-end">Total</th>
                                 </tr>
                             </thead>
@@ -153,6 +138,18 @@
                                     </td>
                                     <td class="text-end">
                                         <span t-esc="int(line.planned_duration)"/>
+                                        <t t-if="line.period_type == 'week'">
+                                            <t t-if="int(line.planned_duration) == 1"> Week</t>
+                                            <t t-else=""> Weeks</t>
+                                        </t>
+                                        <t t-elif="line.period_type == 'month'">
+                                            <t t-if="int(line.planned_duration) == 1"> Month</t>
+                                            <t t-else=""> Months</t>
+                                        </t>
+                                        <t t-else="">
+                                            <t t-if="int(line.planned_duration) == 1"> Day</t>
+                                            <t t-else=""> Days</t>
+                                        </t>
                                     </td>
                                     <td class="text-end">
                                         <span t-field="line.rental_cost"

@@ -484,12 +484,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   };
 
   const updateLine = (index, field, value) => {
-    // When per-line period_type changes, also update the order header
+    // When per-line period_type changes, only update the specific line
     if (field === "period_type") {
-      setForm((prev) => ({ ...prev, rental_period_type: value }));
-      // Update all lines to same period type
       setLines((prev) => prev.map((l, i) => {
-        const updated = i === index ? { ...l, period_type: value } : { ...l, period_type: value };
+        if (i !== index) return l;
+        const updated = { ...l, period_type: value };
         const price = parseFloat(updated.unit_price) || 0;
         const dur = parseFloat(updated.planned_duration) || 1;
         const qty = parseFloat(updated.quantity) || 1;
@@ -792,6 +791,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
     // Auto-populate late_fee_per_day and extra_days PER LINE
     setLines((prev) => prev.map((line) => {
+      // Skip recalculation for already-checked-in lines — preserve frozen values from Odoo
+      const qty = parseFloat(line.quantity) || 1;
+      const returned = parseFloat(line.returned_qty) || 0;
+      if (returned >= qty) {
+        return line;
+      }
       // Per-line planned days using the line's own duration and period type
       const lineDuration = parseFloat(line.planned_duration) || 1;
       const lineMultiplier = LINE_DAY_MULTIPLIERS[line.period_type || form.rental_period_type || "day"] || 1;
@@ -881,7 +886,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       if (odooOrderId && odooAuth) {
         // Save checkin values (advance_returned, images/signatures) FIRST
         const checkinVals = {};
-        if (!isPartial && checkinReturnAdvance) checkinVals.advance_returned = true;
+        if (!isPartial) checkinVals.advance_returned = checkinReturnAdvance;
         // Convert all images to base64 in parallel
         const [custSigB64, authSigB64, ...checkinLineB64s] = await Promise.all([
           uriToBase64(checkinSignatureUri),
@@ -908,6 +913,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           if (lateFeeAmt > 0) updateVals.late_fee_amount = lateFeeAmt;
           const dmgCharge = parseFloat(line.damage_charge) || 0;
           if (dmgCharge > 0) updateVals.damage_charge = dmgCharge;
+          const extraDays = parseInt(line.extra_days) || 0;
+          if (extraDays > 0) updateVals.extra_days = extraDays;
           if (line.damage_note) updateVals.damage_note = line.damage_note;
           if (checkinLineB64s[i]) updateVals.checkin_tool_image = checkinLineB64s[i];
           // For partial: mark this line as returned
@@ -1007,7 +1014,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td>${l.serial_number || ""}</td>
         <td>${l.checkout_condition || ""}</td>
         <td class="text-end">${cur}${(parseFloat(l.unit_price) || 0).toFixed(3)}</td>
-        <td class="text-end">${parseInt(l.planned_duration) || 1}</td>
+        <td class="text-end">${parseInt(l.planned_duration) || 1} ${((d, pt) => d === 1 ? ({"day":"Day","week":"Week","month":"Month"})[pt] || "Day" : ({"day":"Days","week":"Weeks","month":"Months"})[pt] || "Days")(parseInt(l.planned_duration) || 1, l.period_type || form.rental_period_type || "day")}</td>
         <td class="text-end">${cur}${rentalCost.toFixed(3)}</td>
       </tr>`;
     }).join("");
@@ -1033,7 +1040,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td>${l.checkout_condition || ""}</td>
         <td>${l.checkin_condition || ""}</td>
         <td class="text-end">${cur}${(parseFloat(l.unit_price) || 0).toFixed(3)}</td>
-        <td class="text-end">${parseInt(l.planned_duration) || 1}</td>
+        <td class="text-end">${parseInt(l.planned_duration) || 1} ${((d, pt) => d === 1 ? ({"day":"Day","week":"Week","month":"Month"})[pt] || "Day" : ({"day":"Days","week":"Weeks","month":"Months"})[pt] || "Days")(parseInt(l.planned_duration) || 1, l.period_type || form.rental_period_type || "day")}</td>
         <td class="text-end" ${parseInt(l.extra_days) > 0 ? 'style="color:red;font-weight:bold"' : ""}>${l.extra_days || "0"}</td>
         <td class="text-end" ${lateFee > 0 ? 'style="color:red;font-weight:bold"' : ""}>${cur}${lateFee.toFixed(3)}</td>
         <td>${l.damage_note || ""}</td>
@@ -1062,22 +1069,23 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       table.details { width: 100%; margin-bottom: ${isA5 ? "3px" : "12px"}; border-collapse: collapse; }
       table.details td { padding: ${isA5 ? "1px 3px" : "4px 8px"}; font-size: ${isA5 ? "6.5px" : "12px"}; }
       table.details td strong { color: #333; }
-      h5 { margin: ${isA5 ? "3px 0 2px" : "15px 0 6px"}; color: #333; font-size: ${isA5 ? "8px" : "14px"}; }
-      table.tools { width: 100%; border-collapse: collapse; margin-bottom: ${isA5 ? "3px" : "14px"}; font-size: ${isA5 ? "6.5px" : "11px"}; }
-      table.tools th { background: #e9ecef; color: #333; padding: ${isA5 ? "1.5px 2px" : "6px 8px"}; text-align: left; font-size: ${isA5 ? "6px" : "10px"}; border: 1px solid #dee2e6; }
-      table.tools td { padding: ${isA5 ? "1.5px 2px" : "5px 8px"}; border: 1px solid #dee2e6; }
+      h5 { margin: ${isA5 ? "3px 0 2px" : "8px 0 4px"}; color: #333; font-size: ${isA5 ? "8px" : "13px"}; }
+      table.tools { width: 100%; border-collapse: collapse; margin-bottom: ${isA5 ? "3px" : "8px"}; font-size: ${isA5 ? "6.5px" : "11px"}; }
+      table.tools th { background: #e9ecef; color: #333; padding: ${isA5 ? "1.5px 2px" : "4px 6px"}; text-align: left; font-size: ${isA5 ? "6px" : "10px"}; border: 1px solid #dee2e6; }
+      table.tools td { padding: ${isA5 ? "1.5px 2px" : "3px 6px"}; border: 1px solid #dee2e6; }
       .text-end { text-align: right; }
       table.totals { width: ${isA5 ? "55%" : "50%"}; margin-left: auto; border-collapse: collapse; }
-      table.totals td { padding: ${isA5 ? "1.5px 3px" : "4px 8px"}; font-size: ${isA5 ? "7px" : "12px"}; }
+      table.totals td { padding: ${isA5 ? "1.5px 3px" : "2px 8px"}; font-size: ${isA5 ? "7px" : "11px"}; }
       .grand-row { border-top: 2px solid #000; }
       .grand-row td { font-size: ${isA5 ? "7.5px" : "14px"}; font-weight: 700; }
       .late-banner { background: #fff3cd; border: 1px solid #ffc107; padding: ${isA5 ? "2px 4px" : "8px 12px"}; margin-bottom: ${isA5 ? "3px" : "10px"}; border-radius: 4px; font-size: ${isA5 ? "6.5px" : "12px"}; }
       .late-banner strong { color: #856404; }
       .late-banner span { color: #856404; }
-      .sig-row { display: flex; margin-top: ${isA5 ? "5px" : "14px"}; }
+      .sig-row { display: flex; margin-top: ${isA5 ? "5px" : "8px"}; page-break-inside: avoid; }
       .sig-col { flex: 1; text-align: center; }
       .sig-col hr { border: none; border-top: 1px solid #333; width: 80%; margin: 0 auto ${isA5 ? "1px" : "4px"}; }
-      .footer { margin-top: ${isA5 ? "3px" : "6px"}; font-size: ${isA5 ? "5.5px" : "8px"}; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: ${isA5 ? "1px" : "3px"}; }
+      .footer { margin-top: ${isA5 ? "3px" : "4px"}; font-size: ${isA5 ? "5.5px" : "8px"}; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: ${isA5 ? "1px" : "2px"}; page-break-inside: avoid; }
+      .no-break { page-break-inside: avoid; }
     </style></head><body>
 
     <div class="invoice-header">
@@ -1111,18 +1119,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       ${isCheckin ? `<tr>
         <td><strong>Check-In Date:</strong></td>
         <td>${form.date_checkin || "-"}</td>
-        <td><strong>Duration (${({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days"}):</strong></td>
-        <td>${form.rental_duration || "1"}</td>
-      </tr>
-      <tr>
-        <td><strong>Actual Duration:</strong></td>
-        <td>${form.actual_duration || form.rental_duration + " " + ({"day":"Day","week":"Week","month":"Month"})[form.rental_period_type] || "Day"}</td>
         <td><strong>Advance:</strong></td>
         <td>${cur}${advance.toFixed(3)}</td>
       </tr>` : `<tr>
-        <td><strong>Duration (${({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days"}):</strong></td>
-        <td>${form.rental_duration || "1"}</td>
-        <td><strong>Advance:</strong></td>
+        <td></td>
+        <td></td>
+        <td><strong>Advance Collected:</strong></td>
         <td>${cur}${advance.toFixed(3)}</td>
       </tr>`}
       <tr>
@@ -1138,13 +1140,13 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     ${!isCheckin ? `<table class="tools">
       <thead><tr>
         <th>#</th><th>Tool</th><th>Serial No.</th><th>Condition</th>
-        <th class="text-end">Price/${({"day":"Day","week":"Week","month":"Month"})[form.rental_period_type] || "Day"}</th><th class="text-end">${({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days"}</th><th class="text-end">Total</th>
+        <th class="text-end">Price</th><th class="text-end">Duration</th><th class="text-end">Total</th>
       </tr></thead>
       <tbody>${checkoutToolRows}</tbody>
     </table>` : `<table class="tools">
       <thead><tr>
         <th>#</th><th>Tool</th><th>S/N</th><th>Out</th><th>In</th>
-        <th class="text-end">Price</th><th class="text-end">${({"day":"Days","week":"Weeks","month":"Months"})[form.rental_period_type] || "Days"}</th><th class="text-end">Extra Days</th>
+        <th class="text-end">Price</th><th class="text-end">Duration</th><th class="text-end">Extra Days</th>
         <th class="text-end">Late Fee</th><th>Damage</th><th class="text-end">Dmg ر.ع.</th><th class="text-end">Disc.</th>
       </tr></thead>
       <tbody>${checkinToolRows}</tbody>

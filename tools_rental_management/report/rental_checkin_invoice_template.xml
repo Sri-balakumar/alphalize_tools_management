@@ -90,12 +90,12 @@
                             <tr>
                                 <td><strong>Check-In Date:</strong></td>
                                 <td><span t-field="doc.date_checkin" t-options='{"widget": "date"}'/></td>
-                                <td><strong>Duration (<t t-if="doc.rental_period_type == 'week'">Weeks</t><t t-elif="doc.rental_period_type == 'month'">Months</t><t t-else="">Days</t>):</strong></td>
-                                <td><span t-esc="int(doc.rental_duration)"/></td>
+                                <td></td>
+                                <td></td>
                             </tr>
                             <tr>
-                                <td><strong>Actual Duration:</strong></td>
-                                <td><span t-field="doc.actual_duration_display"/></td>
+                                <td></td>
+                                <td></td>
                                 <td><strong>Advance:</strong></td>
                                 <td><span t-field="doc.advance_amount"/></td>
                             </tr>
@@ -125,8 +125,8 @@
                                     <th>S/N</th>
                                     <th>Out</th>
                                     <th>In</th>
-                                    <th class="text-end">Price/<t t-if="doc.rental_period_type == 'week'">Week</t><t t-elif="doc.rental_period_type == 'month'">Month</t><t t-else="">Day</t></th>
-                                    <th class="text-end"><t t-if="doc.rental_period_type == 'week'">Weeks</t><t t-elif="doc.rental_period_type == 'month'">Months</t><t t-else="">Days</t></th>
+                                    <th class="text-end">Price</th>
+                                    <th class="text-end">Duration</th>
                                     <th class="text-end">Extra Days</th>
                                     <th class="text-end">Late Fee</th>
                                     <th>Damage</th>
@@ -164,6 +164,18 @@
                                     </td>
                                     <td class="text-end">
                                         <span t-esc="int(line.planned_duration)"/>
+                                        <t t-if="line.period_type == 'week'">
+                                            <t t-if="int(line.planned_duration) == 1"> Week</t>
+                                            <t t-else=""> Weeks</t>
+                                        </t>
+                                        <t t-elif="line.period_type == 'month'">
+                                            <t t-if="int(line.planned_duration) == 1"> Month</t>
+                                            <t t-else=""> Months</t>
+                                        </t>
+                                        <t t-else="">
+                                            <t t-if="int(line.planned_duration) == 1"> Day</t>
+                                            <t t-else=""> Days</t>
+                                        </t>
                                     </td>
                                     <!-- Extra Days -->
                                     <td class="text-end"

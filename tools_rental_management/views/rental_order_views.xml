@@ -177,6 +177,8 @@
                                        class="oe_subtotal_footer_separator"
                                        string="Amount Due"
                                        invisible="advance_amount == 0 or advance_returned"/>
+                                <field name="advance_amount" string="Advance Collected (Returned)"
+                                       invisible="advance_amount == 0 or not advance_returned"/>
                             </group>
                         </page>
 
@@ -341,6 +343,8 @@
                                        class="oe_subtotal_footer_separator"
                                        string="Amount Due"
                                        invisible="advance_amount == 0 or advance_returned"/>
+                                <field name="advance_amount" string="Advance Collected (Returned)"
+                                       invisible="advance_amount == 0 or not advance_returned"/>
                             </group>
 
                             <separator string="Signatures"/>

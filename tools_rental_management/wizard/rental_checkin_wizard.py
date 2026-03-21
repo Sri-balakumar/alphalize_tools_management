@@ -187,7 +187,7 @@ class RentalCheckinWizard(models.TransientModel):
         return damage_notes, total_damage
 
     def _update_returned_qty(self, lines=None):
-        """Update returned_qty and late fees on each order line."""
+        """Update returned_qty, late fees, and extra_days on each order line."""
         if lines is None:
             lines = self.line_ids
         for wiz_line in lines:
@@ -197,6 +197,9 @@ class RentalCheckinWizard(models.TransientModel):
                 # Accumulate late fee from wizard (only for items returned late)
                 if wiz_line.late_fee > 0:
                     ol.late_fee_amount = (ol.late_fee_amount or 0) + wiz_line.late_fee
+                # Save extra_days from wizard to order line
+                if wiz_line.extra_days > 0:
+                    ol.extra_days = wiz_line.extra_days
                 # Update tool state
                 tool = wiz_line.tool_id
                 if tool.state == 'rented' and tool.available_qty > 0:

@@ -99,9 +99,8 @@ class RentalOrderLine(models.Model):
         CONDITION_SELECTION, string='Check-In Condition',
         help='Condition of the tool at check-in.')
     extra_days = fields.Integer(
-        string='Extra Days',
-        compute='_compute_extra_days', store=True,
-        help='Number of days beyond the planned duration.')
+        string='Extra Days', default=0,
+        help='Number of days beyond the planned duration. Set during check-in.')
     damage_note = fields.Char(
         string='Damage Note',
         help='Damage notes recorded during check-in.')
@@ -306,24 +305,6 @@ class RentalOrderLine(models.Model):
         Duration is number of periods (not days)."""
         if self.period_type:
             self.planned_duration = 1
-
-    # ── Computed: extra days beyond planned ──
-    @api.depends('order_id.actual_duration', 'planned_duration',
-                 'period_type', 'order_id.rental_duration',
-                 'order_id.rental_period_type')
-    def _compute_extra_days(self):
-        for line in self:
-            actual = line.order_id.actual_duration or 0
-            # Convert planned periods to days for comparison
-            periods = (line.planned_duration
-                       or line.order_id.rental_duration or 0)
-            ptype = (line.period_type
-                     or line.order_id.rental_period_type or 'day')
-            planned_days = periods * DAY_MULTIPLIERS.get(ptype, 1)
-            if actual > planned_days:
-                line.extra_days = int(actual - planned_days)
-            else:
-                line.extra_days = 0
 
     # ── Computed: actual duration from order dates ──
     @api.depends('order_id.actual_duration', 'order_id.rental_duration')
