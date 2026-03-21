@@ -416,6 +416,12 @@ class RentalCheckinWizardLine(models.TransientModel):
         string='Disc. Amount', currency_field='currency_id',
         readonly=True)
 
+    # Duration fields (original period type from rental line)
+    period_type = fields.Selection([
+        ('day', 'Day'), ('week', 'Week'), ('month', 'Month'),
+    ], string='Period Type', readonly=True, default='day')
+    planned_duration = fields.Float(string='Planned Duration', readonly=True, default=1)
+
     # Late fee fields
     planned_days = fields.Float(string='Planned Days', readonly=True)
     late_fee_per_day = fields.Monetary(
@@ -429,8 +435,11 @@ class RentalCheckinWizardLine(models.TransientModel):
         currency_field='currency_id')
 
     @api.depends('wizard_id.checkout_date', 'wizard_id.checkin_date',
-                 'planned_days', 'late_fee_per_day', 'return_qty')
+                 'planned_days', 'late_fee_per_day', 'return_qty',
+                 'period_type', 'planned_duration')
     def _compute_late_fields(self):
+        period_labels = {'day': 'Day', 'week': 'Week', 'month': 'Month'}
+        period_labels_plural = {'day': 'Days', 'week': 'Weeks', 'month': 'Months'}
         for line in self:
             checkout = line.wizard_id.checkout_date
             checkin = line.wizard_id.checkin_date
@@ -441,20 +450,26 @@ class RentalCheckinWizardLine(models.TransientModel):
                 or 0
             )
 
+            # Format planned duration using original period type
+            dur = int(line.planned_duration or 1)
+            ptype = line.period_type or 'day'
+            label = period_labels_plural.get(ptype, 'Days') if dur != 1 else period_labels.get(ptype, 'Day')
+            planned_label = f"{dur} {label}"
+
             if checkout and checkin:
                 actual = max((checkin - checkout).days, 1)
                 extra = max(actual - planned, 0) if planned else 0
                 line.extra_days = extra
                 if extra > 0:
                     line.duration_display = (
-                        f"{_format_duration(planned)} + "
+                        f"{planned_label} + "
                         f"{_format_duration(extra)} Extra"
                     )
                 else:
-                    line.duration_display = _format_duration(actual)
+                    line.duration_display = planned_label
                 # Late fee for this serialized unit (qty is always 1)
                 line.late_fee = extra * (line.late_fee_per_day or 0)
             else:
                 line.extra_days = 0
-                line.duration_display = ''
+                line.duration_display = planned_label
                 line.late_fee = 0

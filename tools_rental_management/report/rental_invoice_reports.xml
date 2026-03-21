@@ -22,13 +22,13 @@
         <field name="page_width">148</field>
         <field name="page_height">210</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">30</field>
-        <field name="margin_bottom">20</field>
+        <field name="margin_top">10</field>
+        <field name="margin_bottom">8</field>
         <field name="margin_left">5</field>
         <field name="margin_right">5</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">25</field>
-        <field name="dpi">90</field>
+        <field name="header_spacing">5</field>
+        <field name="dpi">96</field>
     </record>
 
     <!-- ═══ CHECKOUT INVOICE REPORTS ═══ -->
@@ -46,8 +46,8 @@
         <field name="name">Checkout Invoice (A5)</field>
         <field name="model">rental.order</field>
         <field name="report_type">qweb-pdf</field>
-        <field name="report_name">tools_rental_management.report_checkout_invoice</field>
-        <field name="report_file">tools_rental_management.report_checkout_invoice</field>
+        <field name="report_name">tools_rental_management.report_checkout_invoice_a5</field>
+        <field name="report_file">tools_rental_management.report_checkout_invoice_a5</field>
         <field name="print_report_name">'Checkout_Invoice_%s' % object.name</field>
         <field name="paperformat_id" ref="paperformat_rental_a5"/>
     </record>
@@ -67,8 +67,8 @@
         <field name="name">Check-In Invoice (A5)</field>
         <field name="model">rental.order</field>
         <field name="report_type">qweb-pdf</field>
-        <field name="report_name">tools_rental_management.report_checkin_invoice</field>
-        <field name="report_file">tools_rental_management.report_checkin_invoice</field>
+        <field name="report_name">tools_rental_management.report_checkin_invoice_a5</field>
+        <field name="report_file">tools_rental_management.report_checkin_invoice_a5</field>
         <field name="print_report_name">'CheckIn_Invoice_%s' % object.name</field>
         <field name="paperformat_id" ref="paperformat_rental_a5"/>
     </record>

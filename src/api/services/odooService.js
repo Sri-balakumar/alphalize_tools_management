@@ -416,19 +416,32 @@ export const createInvoice = async (auth, id) => {
 };
 
 // Invoice PDF reports
-export const downloadCheckoutInvoice = async (auth, orderId) => {
-  return downloadReportPdf(auth, "tools_rental_management.report_checkout_invoice", Number(orderId));
+export const downloadCheckoutInvoice = async (auth, orderId, paperSize = "a4") => {
+  const reportName = paperSize === "a5"
+    ? "tools_rental_management.report_checkout_invoice_a5"
+    : "tools_rental_management.report_checkout_invoice";
+  return downloadReportPdf(auth, reportName, Number(orderId));
 };
 
-export const downloadCheckinInvoice = async (auth, orderId) => {
-  return downloadReportPdf(auth, "tools_rental_management.report_checkin_invoice", Number(orderId));
+export const downloadCheckinInvoice = async (auth, orderId, paperSize = "a4") => {
+  const reportName = paperSize === "a5"
+    ? "tools_rental_management.report_checkin_invoice_a5"
+    : "tools_rental_management.report_checkin_invoice";
+  return downloadReportPdf(auth, reportName, Number(orderId));
 };
 
 // Send invoice PDF via WhatsApp
-export const sendInvoiceWhatsApp = async (auth, orderId, invoiceType, customerPhone) => {
-  const reportName = invoiceType === "checkout"
-    ? "tools_rental_management.report_checkout_invoice"
-    : "tools_rental_management.report_checkin_invoice";
+export const sendInvoiceWhatsApp = async (auth, orderId, invoiceType, customerPhone, paperSize = "a4") => {
+  let reportName;
+  if (invoiceType === "checkout") {
+    reportName = paperSize === "a5"
+      ? "tools_rental_management.report_checkout_invoice_a5"
+      : "tools_rental_management.report_checkout_invoice";
+  } else {
+    reportName = paperSize === "a5"
+      ? "tools_rental_management.report_checkin_invoice_a5"
+      : "tools_rental_management.report_checkin_invoice";
+  }
 
   const pdfUri = await downloadReportPdf(auth, reportName, Number(orderId));
   const base64Data = await FileSystem.readAsStringAsync(pdfUri, {

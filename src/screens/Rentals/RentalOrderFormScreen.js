@@ -1230,7 +1230,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     if (!odooOrderId || !odooAuth) return null;
     try {
       const downloadFn = invoiceType === "checkout" ? downloadCheckoutInvoice : downloadCheckinInvoice;
-      const fileUri = await downloadFn(odooAuth, odooOrderId);
+      const fileUri = await downloadFn(odooAuth, odooOrderId, invoicePaperSize);
       return fileUri;
     } catch (e) {
       console.warn("Odoo PDF download failed, using local fallback:", e.message);

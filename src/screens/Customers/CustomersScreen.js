@@ -172,15 +172,25 @@ const CustomersScreen = ({ navigation }) => {
   const handleSave = async () => {
     if (isSaveDisabled) return;
     if (!editCustomer || !odooAuth) return;
-    setShowEditModal(false);
-    updateCustomer(odooAuth, editCustomer.odoo_id || parseInt(editCustomer.id), {
+    const updatedFields = {
       name: editName.trim(),
       phone: editPhone ? editCountryCode + editPhone : "",
       email: editEmail.trim(),
-    }).then(() => {
-      fetchCustomers(odooAuth);
+    };
+    // Optimistically update the local list instantly
+    const custId = editCustomer.odoo_id || parseInt(editCustomer.id);
+    useToolStore.setState((state) => ({
+      customers: state.customers.map((c) =>
+        (c.odoo_id || parseInt(c.id)) === custId ? { ...c, ...updatedFields } : c
+      ),
+    }));
+    setShowEditModal(false);
+    // Sync with Odoo in background
+    updateCustomer(odooAuth, custId, updatedFields).then(() => {
+      fetchCustomers(odooAuth, true);
     }).catch((e) => {
       Alert.alert("Error", "Failed to update: " + e.message);
+      fetchCustomers(odooAuth, true); // Revert to server state on error
     });
   };
 

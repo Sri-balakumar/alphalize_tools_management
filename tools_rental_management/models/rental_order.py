@@ -526,6 +526,8 @@ class RentalOrder(models.Model):
                 'returned_so_far': ol.returned_qty or 0,
                 'pending_qty': pending,
                 'return_qty': pending,
+                'period_type': ol.period_type or self.rental_period_type or 'day',
+                'planned_duration': ol.planned_duration or self.rental_duration or 1,
                 'planned_days': (
                     (ol.planned_duration or self.rental_duration or 1)
                     * DAY_MULTIPLIERS.get(
