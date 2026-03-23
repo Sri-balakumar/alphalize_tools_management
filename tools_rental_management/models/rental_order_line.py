@@ -152,6 +152,11 @@ class RentalOrderLine(models.Model):
                     order = self.env['rental.order'].browse(order_id)
                     if order.rental_period_type:
                         vals['period_type'] = order.rental_period_type
+            # Auto-populate product_id from tool when app sends only tool_id
+            if not vals.get('product_id') and vals.get('tool_id'):
+                tool = self.env['rental.tool'].browse(vals['tool_id'])
+                if tool.product_id:
+                    vals['product_id'] = tool.product_id.id
         lines = super().create(vals_list)
         for line in lines:
             if not line.unit_price:
