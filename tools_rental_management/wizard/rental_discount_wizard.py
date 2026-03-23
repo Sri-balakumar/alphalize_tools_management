@@ -185,7 +185,7 @@ class RentalDiscountWizard(models.TransientModel):
             'action': 'discount',
             'date': fields.Date.today(),
             'user_id': self.env.user.id,
-            'notes': (f'Discount of $ {total_discount:.2f} applied. '
+            'notes': (f'Discount of {self.order_id.currency_id.symbol or "$"} {total_discount:.2f} applied. '
                       f'Authorized by: {self.authorized_name}.'),
         })
 

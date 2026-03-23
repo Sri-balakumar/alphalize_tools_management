@@ -96,7 +96,7 @@ class RentalCheckoutWizard(models.TransientModel):
                 'action': 'note',
                 'date': fields.Date.today(),
                 'user_id': self.env.user.id,
-                'notes': f'Advance of $ {self.advance_amount:.2f} collected from customer.',
+                'notes': f'Advance of {self.order_id.currency_id.symbol or "$"} {self.advance_amount:.2f} collected from customer.',
             })
 
         return {'type': 'ir.actions.act_window_close'}

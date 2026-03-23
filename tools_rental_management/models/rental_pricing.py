@@ -87,7 +87,8 @@ class RentalPricing(models.Model):
     def _compute_name(self):
         for rec in self:
             source = rec.tool_id.name or (rec.category_id.name if rec.category_id else 'General')
-            rec.name = f"{source} - ${rec.price}/day"
+            symbol = rec.currency_id.symbol if rec.currency_id else ''
+            rec.name = f"{source} - {symbol}{rec.price}/day"
 
     def write(self, vals):
         res = super().write(vals)

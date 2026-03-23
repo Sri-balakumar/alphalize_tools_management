@@ -15,6 +15,7 @@ export class RentalOrderReport extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.currencySymbol = "";
 
         this.state = useState({
             orders: [],
@@ -38,6 +39,13 @@ export class RentalOrderReport extends Component {
     /* ── Data loading ─────────────────────────────────────── */
 
     async loadData() {
+        // Fetch company currency symbol
+        const companies = await this.orm.searchRead("res.company", [], ["currency_id"], { limit: 1 });
+        if (companies.length && companies[0].currency_id) {
+            const currencies = await this.orm.searchRead("res.currency", [["id", "=", companies[0].currency_id[0]]], ["symbol"], { limit: 1 });
+            this.currencySymbol = currencies.length ? currencies[0].symbol : "$";
+        }
+
         const orders = await this.orm.searchRead(
             "rental.order", [],
             [
@@ -135,7 +143,7 @@ export class RentalOrderReport extends Component {
     /* ── Helpers ───────────────────────────────────────────── */
 
     formatMoney(val) {
-        return "$ " + (val || 0).toFixed(2);
+        return (this.currencySymbol || "$") + " " + (val || 0).toFixed(2);
     }
 
     getStatusLabel(state) {

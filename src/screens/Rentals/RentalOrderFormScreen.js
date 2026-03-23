@@ -221,7 +221,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [invoiceSendingWA, setInvoiceSendingWA] = useState(false);
   const [phoneError, setPhoneError] = useState(null);
   const [emailError, setEmailError] = useState(null);
-  const [countryCode, setCountryCode] = useState("+91");
+  const [countryCode, setCountryCode] = useState("+968");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [isNewCustomer, setIsNewCustomer] = useState(false);
@@ -298,18 +298,18 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       )
     : COUNTRY_CODES, [countrySearch]);
 
-  // Split a full phone like "+919074837168" into { code: "+91", local: "9074837168" }
+  // Split a full phone like "+9689074837168" into { code: "+968", local: "9074837168" }
   const splitPhoneCountryCode = (fullPhone) => {
-    if (!fullPhone) return { code: "+91", local: "" };
+    if (!fullPhone) return { code: "+968", local: "" };
     let phone = fullPhone.replace(/[\s\-()]/g, "");
-    if (!phone.startsWith("+")) return { code: "+91", local: phone };
+    if (!phone.startsWith("+")) return { code: "+968", local: phone };
     // Try matching longest country codes first (4 digits, then 3, 2, 1)
     for (let len = 4; len >= 1; len--) {
       const prefix = phone.substring(0, len + 1); // +1 for the "+"
       const match = COUNTRY_CODES.find((c) => c.code === prefix);
       if (match) return { code: match.code, local: phone.substring(len + 1) };
     }
-    return { code: "+91", local: phone.replace("+", "") };
+    return { code: "+968", local: phone.replace("+", "") };
   };
 
   // On mount, split existing phone into country code + local number
@@ -1059,7 +1059,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       @page { size: ${isA5 ? "148mm 210mm" : "A4"} portrait; margin: ${isA5 ? "4mm" : "8mm"}; }
       body { font-family: Arial, Helvetica, sans-serif; padding: ${isA5 ? "4px" : "12px"}; color: #333; font-size: ${isA5 ? "7px" : "11px"}; line-height: ${isA5 ? "1.2" : "1.3"}; }
-      .invoice-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: ${isA5 ? "4px" : "10px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "8px"}; }
+      .invoice-header { text-align: center; margin-bottom: ${isA5 ? "4px" : "10px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "8px"}; }
       h2.title { text-align: center; color: #2c3e50; margin: 0 0 ${isA5 ? "1px" : "2px"} 0; font-size: ${isA5 ? "10px" : "16px"}; }
       h4.sub { text-align: center; color: #888; margin: 0 0 ${isA5 ? "3px" : "8px"} 0; font-size: ${isA5 ? "7.5px" : "12px"}; }
       .row { display: flex; gap: ${isA5 ? "6px" : "20px"}; margin-bottom: ${isA5 ? "3px" : "12px"}; }
@@ -1089,13 +1089,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     </style></head><body>
 
     <div class="invoice-header">
-      ${assets.logo ? `<img src="${assets.logo}" style="width:${isA5 ? "55px" : "90px"};height:auto;" />` : "<div></div>"}
-      <div style="text-align:center;">
-        <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : "CHECKOUT INVOICE"}</h2>
-        <h4 class="sub">${form.name || "New Order"}</h4>
-        ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
-      </div>
-      <div style="width:${isA5 ? "55px" : "90px"};"></div>
+      ${assets.logo ? `<div style="margin-bottom:${isA5 ? "3px" : "6px"};"><img src="${assets.logo}" style="width:${isA5 ? "80px" : "130px"};height:auto;" /></div>` : ""}
+      <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : "CHECKOUT INVOICE"}</h2>
+      <h4 class="sub">${form.name || "New Order"}</h4>
+      ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
     </div>
 
     <div class="row">

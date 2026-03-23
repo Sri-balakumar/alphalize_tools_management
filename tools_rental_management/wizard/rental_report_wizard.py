@@ -48,9 +48,10 @@ class RentalReportDownload(models.TransientModel):
             'font_size': 10, 'align': 'center', 'valign': 'vcenter',
             'border': 1, 'num_format': '#,##0',
         })
+        currency_symbol = self.env.company.currency_id.symbol or '$'
         money_fmt = workbook.add_format({
             'font_size': 10, 'align': 'right', 'valign': 'vcenter',
-            'border': 1, 'num_format': '$#,##0.00',
+            'border': 1, 'num_format': f'"{currency_symbol}"#,##0.00',
         })
         status_fmt = workbook.add_format({
             'font_size': 10, 'align': 'center', 'valign': 'vcenter',
@@ -68,7 +69,7 @@ class RentalReportDownload(models.TransientModel):
         total_money_fmt = workbook.add_format({
             'bold': True, 'font_size': 11, 'align': 'right',
             'valign': 'vcenter', 'border': 1, 'bg_color': '#F2F2F2',
-            'num_format': '$#,##0.00',
+            'num_format': f'"{currency_symbol}"#,##0.00',
         })
         total_int_fmt = workbook.add_format({
             'bold': True, 'font_size': 11, 'align': 'center',

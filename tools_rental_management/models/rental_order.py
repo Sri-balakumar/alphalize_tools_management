@@ -337,7 +337,8 @@ class RentalOrder(models.Model):
                         or ''
                     )
                     amount = vals['discount_amount']
-                    notes = f'Discount of $ {amount:.2f} applied.'
+                    symbol = order.currency_id.symbol or '$'
+                    notes = f'Discount of {symbol} {amount:.2f} applied.'
                     if authorizer:
                         notes += f' Authorized by: {authorizer}.'
                     self.env['rental.timesheet'].create({
@@ -361,7 +362,7 @@ class RentalOrder(models.Model):
                         'action': 'damage',
                         'date': fields.Date.today(),
                         'user_id': self.env.user.id,
-                        'notes': f'Damage charges of $ {amount:.2f} recorded.',
+                        'notes': f'Damage charges of {order.currency_id.symbol or "$"} {amount:.2f} recorded.',
                         'cost_impact': amount,
                     })
         return result
@@ -516,7 +517,7 @@ class RentalOrder(models.Model):
             if ol.discount_type == 'percentage' and ol.discount_value:
                 discount_display = f"{ol.discount_value}%"
             elif ol.discount_type == 'fixed' and ol.discount_value:
-                discount_display = f"$ {ol.discount_value}"
+                discount_display = f"{self.currency_id.symbol or '$'} {ol.discount_value}"
             line_vals.append({
                 'wizard_id': wizard.id,
                 'order_line_id': ol.id,

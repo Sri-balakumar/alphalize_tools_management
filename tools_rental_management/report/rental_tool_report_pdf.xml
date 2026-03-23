@@ -67,7 +67,7 @@
                         </td>
                         <td style="width: 20%; text-align: center; padding: 10px; background: #fffbf0; border: 1px solid #ddd;">
                             <div style="font-size: 22px; font-weight: bold; color: #fd7e14;">
-                                $ <t t-esc="'%.2f' % sum_revenue"/>
+                                <t t-esc="res_company.currency_id.symbol"/> <t t-esc="'%.2f' % sum_revenue"/>
                             </div>
                             <div style="font-size: 11px; color: #666;">Total Revenue</div>
                         </td>
@@ -139,10 +139,10 @@
                                     <t t-esc="rec.total_rentals"/>
                                 </td>
                                 <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">
-                                    $ <t t-esc="'%.2f' % rec.price_per_day"/>
+                                    <t t-esc="res_company.currency_id.symbol"/> <t t-esc="'%.2f' % rec.price_per_day"/>
                                 </td>
                                 <td style="padding: 6px; text-align: right; border: 1px solid #ddd;">
-                                    $ <t t-esc="'%.2f' % rec.late_fee_per_day"/>
+                                    <t t-esc="res_company.currency_id.symbol"/> <t t-esc="'%.2f' % rec.late_fee_per_day"/>
                                 </td>
                             </tr>
                         </t>

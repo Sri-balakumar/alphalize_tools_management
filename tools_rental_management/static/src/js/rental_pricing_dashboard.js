@@ -9,6 +9,7 @@ class RentalPricingDashboard extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.currencySymbol = "";
         this.allRecords = [];
         this.state = useState({
             records: [],
@@ -31,6 +32,13 @@ class RentalPricingDashboard extends Component {
     }
 
     async loadData() {
+        // Fetch company currency symbol
+        const companies = await this.orm.searchRead("res.company", [], ["currency_id"], { limit: 1 });
+        if (companies.length && companies[0].currency_id) {
+            const currencies = await this.orm.searchRead("res.currency", [["id", "=", companies[0].currency_id[0]]], ["symbol"], { limit: 1 });
+            this.currencySymbol = currencies.length ? currencies[0].symbol : "$";
+        }
+
         const records = await this.orm.searchRead(
             "rental.pricing",
             [["is_primary_pricing", "=", true]],
@@ -198,7 +206,7 @@ class RentalPricingDashboard extends Component {
     }
 
     formatMoney(val) {
-        return "$ " + Number(val || 0).toFixed(2);
+        return (this.currencySymbol || "$") + " " + Number(val || 0).toFixed(2);
     }
 }
 
