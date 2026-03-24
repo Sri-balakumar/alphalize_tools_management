@@ -59,6 +59,7 @@
         'report/rental_checkout_invoice_template.xml',
         'report/rental_checkin_invoice_template.xml',
         'wizard/rental_print_wizard_views.xml',
+        'views/res_partner_views.xml',
         'views/rental_menus.xml',
     ],
     'assets': {
@@ -94,6 +95,9 @@
             # Categories dashboard
             'tools_rental_management/static/src/js/rental_category_dashboard.js',
             'tools_rental_management/static/src/xml/rental_category_dashboard.xml',
+            # Contact list delete button
+            'tools_rental_management/static/src/js/contact_list_delete_button.js',
+            'tools_rental_management/static/src/xml/contact_list_delete_button.xml',
         ],
     },
     'demo': [],

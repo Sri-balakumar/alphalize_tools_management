@@ -10,18 +10,15 @@ class RentalCheckoutWizard(models.TransientModel):
         'rental.order', string='Rental Order', required=True)
     partner_id = fields.Many2one(
         'res.partner', string='Customer', readonly=True)
-    checkout_date = fields.Date(
-        string='Check-Out Date', default=fields.Date.today)
+    checkout_date = fields.Datetime(
+        string='Check-Out Date', default=fields.Datetime.now)
     line_ids = fields.One2many(
         'rental.checkout.wizard.line', 'wizard_id',
         string='Tools')
 
-    # ID Proof – camera capture (Binary) + file uploads (Many2many)
-    id_proof_camera = fields.Binary(string='ID Photo (Camera)')
-    id_proof = fields.Many2many(
-        'ir.attachment', 'rental_checkout_id_proof_rel',
-        'wizard_id', 'attachment_id',
-        string='ID Proof')
+    # ID Proof – front (required) + back (optional)
+    id_proof_front = fields.Binary(string='ID Proof - Front')
+    id_proof_back = fields.Binary(string='ID Proof - Back')
 
     # Customer Signature
     customer_signature = fields.Binary(string='Customer Signature')
@@ -52,17 +49,19 @@ class RentalCheckoutWizard(models.TransientModel):
     def action_confirm_checkout(self):
         self.ensure_one()
 
-        if not self.id_proof_camera:
-            raise UserError(_('ID Proof is mandatory. Please take a photo or attach a file.'))
+        if not self.id_proof_front:
+            raise UserError(_('ID Proof (Front Side) is mandatory. Please take a photo or attach a file.'))
         if not self.customer_signature:
             raise UserError(_('Customer signature is mandatory. Please sign before proceeding.'))
 
-        # Save ID proof photo + signature + timestamp on the rental order
+        # Save ID proof photos + signature + timestamp on the rental order
         order_vals = {
-            'id_proof_image': self.id_proof_camera,
+            'id_proof_front': self.id_proof_front,
             'customer_signature': self.customer_signature,
             'checkout_signature_date': fields.Datetime.now(),
         }
+        if self.id_proof_back:
+            order_vals['id_proof_back'] = self.id_proof_back
 
         # Save advance amount if entered
         if self.advance_amount > 0:

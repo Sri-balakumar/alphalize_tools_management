@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="tools_rental_management.ContactListDeleteView" t-inherit="web.ListView" t-inherit-mode="primary">
+        <xpath expr="//Layout/t[@t-set-slot='control-panel-create-button']" position="inside">
+            <button type="button"
+                    t-att-class="'btn ms-1 ' + (this.hasSelectedRecords ? 'btn-danger' : 'btn-danger opacity-50')"
+                    t-att-disabled="!this.hasSelectedRecords"
+                    t-on-click="() => this.onForceDelete()">
+                <i class="fa fa-trash me-1"/>Delete
+            </button>
+        </xpath>
+    </t>
+
+</templates>

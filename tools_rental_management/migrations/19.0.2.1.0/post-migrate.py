@@ -16,7 +16,8 @@ def migrate(cr, version):
     ]
     order_fields = [
         ('rental_order', 'customer_signature', 'rental.order', 'customer_signature'),
-        ('rental_order', 'id_proof_image', 'rental.order', 'id_proof_image'),
+        ('rental_order', 'id_proof_front', 'rental.order', 'id_proof_front'),
+        ('rental_order', 'id_proof_back', 'rental.order', 'id_proof_back'),
         ('rental_order', 'checkin_customer_signature', 'rental.order', 'checkin_customer_signature'),
         ('rental_order', 'checkin_signature', 'rental.order', 'checkin_signature'),
         ('rental_order', 'discount_auth_signature', 'rental.order', 'discount_auth_signature'),

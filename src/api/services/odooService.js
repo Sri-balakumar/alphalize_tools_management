@@ -163,7 +163,7 @@ const ORDER_FIELDS = [
 
 // Image / signature Binary fields (fetched separately to avoid slowing list views)
 const ORDER_IMAGE_FIELDS = [
-  "customer_signature", "id_proof_image",
+  "customer_signature", "id_proof_front", "id_proof_back",
   "checkin_customer_signature", "checkin_signature",
   "discount_auth_signature", "discount_auth_photo",
 ];
@@ -305,7 +305,8 @@ export const fetchOrderImages = async (auth, id) => {
   const r = records[0];
   const result = {
     customer_signature: r.customer_signature || false,
-    id_proof_image: r.id_proof_image || false,
+    id_proof_front: r.id_proof_front || false,
+    id_proof_back: r.id_proof_back || false,
     checkin_customer_signature: r.checkin_customer_signature || false,
     checkin_signature: r.checkin_signature || false,
     discount_auth_signature: r.discount_auth_signature || false,
@@ -522,7 +523,8 @@ const mapOrder = (r, lines = [], timesheet = []) => ({
   is_late: r.is_late || false,
   // Image / signature base64 strings (false if empty)
   customer_signature: r.customer_signature || false,
-  id_proof_image: r.id_proof_image || false,
+  id_proof_front: r.id_proof_front || false,
+  id_proof_back: r.id_proof_back || false,
   checkin_customer_signature: r.checkin_customer_signature || false,
   checkin_signature: r.checkin_signature || false,
   discount_auth_signature: r.discount_auth_signature || false,

@@ -24,10 +24,10 @@ class RentalCheckinWizard(models.TransientModel):
         'rental.order', string='Rental Order', required=True)
     partner_id = fields.Many2one(
         'res.partner', string='Customer', readonly=True)
-    checkout_date = fields.Date(
+    checkout_date = fields.Datetime(
         string='Check-Out Date', compute='_compute_checkout_date')
-    checkin_date = fields.Date(
-        string='Check-In Date', default=fields.Date.today)
+    checkin_date = fields.Datetime(
+        string='Check-In Date', default=fields.Datetime.now)
     total_days = fields.Integer(
         string='Total Days', compute='_compute_total_days')
     total_days_display = fields.Char(

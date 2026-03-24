@@ -44,9 +44,9 @@ class RentalOrder(models.Model):
         string='Planned Check-Out', tracking=True)
     date_planned_checkin = fields.Date(
         string='Planned Check-In', tracking=True)
-    date_checkout = fields.Date(
+    date_checkout = fields.Datetime(
         string='Actual Check-Out', tracking=True, copy=False)
-    date_checkin = fields.Date(
+    date_checkin = fields.Datetime(
         string='Actual Check-In', tracking=True, copy=False)
 
     # ── Rental Period Config ────────────────────────────────────────────
@@ -126,10 +126,14 @@ class RentalOrder(models.Model):
         'ir.attachment', 'rental_order_id_proof_rel',
         'order_id', 'attachment_id',
         string='ID Proof', copy=False)
-    id_proof_image = fields.Binary(
-        string='ID Proof Photo', copy=False,
+    id_proof_front = fields.Binary(
+        string='ID Proof - Front', copy=False,
         attachment=True,
-        help='ID proof photo captured at check-out.')
+        help='ID proof front side photo captured at check-out.')
+    id_proof_back = fields.Binary(
+        string='ID Proof - Back', copy=False,
+        attachment=True,
+        help='ID proof back side photo captured at check-out.')
 
     # -- Check-In Signatures --
     checkin_customer_signature = fields.Binary(
@@ -215,20 +219,24 @@ class RentalOrder(models.Model):
     @api.depends('checkout_signature_date', 'checkin_customer_signature_date',
                  'checkin_signature_date', 'discount_applied_date')
     def _compute_date_displays(self):
-        fmt = '%d/%m/%Y %H:%M'
+        import pytz
+        fmt = '%d/%m/%Y %I:%M %p'
+        user_tz = pytz.timezone(self.env.user.tz or 'UTC')
+        def _fmt(dt):
+            if not dt:
+                return ''
+            utc_dt = pytz.utc.localize(dt.replace(tzinfo=None))
+            local_dt = utc_dt.astimezone(user_tz)
+            return local_dt.strftime(fmt)
         for order in self:
-            order.checkout_signature_date_display = (
-                order.checkout_signature_date.strftime(fmt)
-                if order.checkout_signature_date else '')
-            order.checkin_customer_signature_date_display = (
-                order.checkin_customer_signature_date.strftime(fmt)
-                if order.checkin_customer_signature_date else '')
-            order.checkin_signature_date_display = (
-                order.checkin_signature_date.strftime(fmt)
-                if order.checkin_signature_date else '')
-            order.discount_applied_date_display = (
-                order.discount_applied_date.strftime(fmt)
-                if order.discount_applied_date else '')
+            order.checkout_signature_date_display = _fmt(
+                order.checkout_signature_date)
+            order.checkin_customer_signature_date_display = _fmt(
+                order.checkin_customer_signature_date)
+            order.checkin_signature_date_display = _fmt(
+                order.checkin_signature_date)
+            order.discount_applied_date_display = _fmt(
+                order.discount_applied_date)
 
     def _compute_duration_display(self):
         period_labels = {
@@ -267,7 +275,7 @@ class RentalOrder(models.Model):
             if order.state == 'checked_out' and order.date_planned_checkin:
                 order.is_late = today > order.date_planned_checkin
             elif order.date_planned_checkin and order.date_checkin:
-                order.is_late = order.date_checkin > order.date_planned_checkin
+                order.is_late = order.date_checkin.date() > order.date_planned_checkin
             else:
                 order.is_late = False
 
@@ -296,7 +304,10 @@ class RentalOrder(models.Model):
             if 'checkout_signature_date' not in vals:
                 vals['checkout_signature_date'] = now
         # ID proof photo saved directly → stamp checkout_signature_date
-        if 'id_proof_image' in vals and vals['id_proof_image']:
+        if 'id_proof_front' in vals and vals['id_proof_front']:
+            if 'checkout_signature_date' not in vals:
+                vals['checkout_signature_date'] = now
+        if 'id_proof_back' in vals and vals['id_proof_back']:
             if 'checkout_signature_date' not in vals:
                 vals['checkout_signature_date'] = now
         # Checkin customer signature saved directly
@@ -314,7 +325,7 @@ class RentalOrder(models.Model):
         result = super().write(vals)
         # Re-sync media records whenever relevant fields change
         sig_fields = {
-            'customer_signature', 'id_proof_image',
+            'customer_signature', 'id_proof_front', 'id_proof_back',
             'checkin_customer_signature', 'checkin_signature',
             'discount_auth_photo', 'discount_auth_signature',
         }
@@ -370,14 +381,21 @@ class RentalOrder(models.Model):
     def _sync_media_records(self):
         """Create/update rental.order.media records from the order's
         signature and photo fields so they appear in the popup list views."""
+        import pytz
         self.ensure_one()
-        fmt = '%d/%m/%Y %H:%M'
+        fmt = '%d/%m/%Y %I:%M %p'
+        user_tz = pytz.timezone(self.env.user.tz or 'UTC')
 
         def _upsert(media_type, media_kind, label, image_data,
                     signer_name=None, dt=None):
             if not image_data:
                 return
-            dt_str = dt.strftime(fmt) if dt else ''
+            if dt:
+                utc_dt = pytz.utc.localize(dt.replace(tzinfo=None))
+                local_dt = utc_dt.astimezone(user_tz)
+                dt_str = local_dt.strftime(fmt)
+            else:
+                dt_str = ''
             existing = self.env['rental.order.media'].search([
                 ('order_id', '=', self.id),
                 ('media_type', '=', media_type),
@@ -404,8 +422,12 @@ class RentalOrder(models.Model):
                 self.customer_signature,
                 signer_name=self.partner_id.name,
                 dt=self.checkout_signature_date)
-        _upsert('checkout', 'photo', 'ID Proof Photo',
-                self.id_proof_image,
+        _upsert('checkout', 'photo', 'ID Proof - Front',
+                self.id_proof_front,
+                signer_name=self.partner_id.name,
+                dt=self.checkout_signature_date)
+        _upsert('checkout', 'photo', 'ID Proof - Back',
+                self.id_proof_back,
                 signer_name=self.partner_id.name,
                 dt=self.checkout_signature_date)
 
@@ -480,7 +502,7 @@ class RentalOrder(models.Model):
             for line in order.line_ids:
                 if line.tool_id:
                     line.tool_id.state = 'rented'
-            order.date_checkout = fields.Date.today()
+            order.date_checkout = fields.Datetime.now()
             order.state = 'checked_out'
             # Create initial timesheet entry
             self.env['rental.timesheet'].create({
@@ -584,7 +606,7 @@ class RentalOrder(models.Model):
         for order in self:
             if order.state != 'checked_out':
                 raise UserError(_('Only checked-out orders can be checked in.'))
-            order.date_checkin = fields.Date.today()
+            order.date_checkin = fields.Datetime.now()
             if damage_charge:
                 order.damage_charges = damage_charge
             # Release tools — mark available again

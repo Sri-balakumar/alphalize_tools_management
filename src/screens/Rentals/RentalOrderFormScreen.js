@@ -170,7 +170,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [tcAccepted, setTcAccepted] = useState(false);
   const isAfterCheckout = ["checked_out", "checked_in", "done", "invoiced"].includes(existingOrder?.state);
   const [checkoutIdProof, setCheckoutIdProof] = useState(false);
-  const [idProofUri, setIdProofUri] = useState(null);
+  const [idProofFrontUri, setIdProofFrontUri] = useState(null);
+  const [idProofBackUri, setIdProofBackUri] = useState(null);
   const [toolPhotoUris, setToolPhotoUris] = useState({});
   const [toolPhotoTimestamps, setToolPhotoTimestamps] = useState({});
   const [toolCheckinPhotoUris, setToolCheckinPhotoUris] = useState({});
@@ -679,8 +680,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Required", "Set condition for all tools before check-out");
       return;
     }
-    if (!idProofUri) {
-      Alert.alert("Required", "ID Proof is mandatory for check-out");
+    if (!idProofFrontUri) {
+      Alert.alert("Required", "ID Proof (Front Side) is mandatory for check-out");
       return;
     }
     if (!checkoutSignatureUri) {
@@ -710,9 +711,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           await storeCheckoutOrder(odooAuth, odooOrderId);
 
           // 2. Convert all images to base64 in parallel
-          const [sigB64, idB64, ...lineB64s] = await Promise.all([
+          const [sigB64, idFrontB64, idBackB64, ...lineB64s] = await Promise.all([
             uriToBase64(checkoutSignatureUri),
-            uriToBase64(idProofUri),
+            uriToBase64(idProofFrontUri),
+            uriToBase64(idProofBackUri),
             ...lines.map((_, i) => uriToBase64(toolPhotoUris[i])),
           ]);
 
@@ -721,7 +723,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           const advanceAmt = parseFloat(form.advance_amount) || 0;
           if (advanceAmt > 0) orderVals.advance_amount = advanceAmt;
           if (sigB64) orderVals.customer_signature = sigB64;
-          if (idB64) orderVals.id_proof_image = idB64;
+          if (idFrontB64) orderVals.id_proof_front = idFrontB64;
+          if (idBackB64) orderVals.id_proof_back = idBackB64;
           if (Object.keys(orderVals).length > 0) {
             await updateOrderValues(odooAuth, odooOrderId, orderVals);
           }
@@ -1651,16 +1654,19 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               setCheckoutSignatureUri(base64ToDataUri(imgs.customer_signature));
               setCheckoutSignature(true);
             }
-            if (imgs.id_proof_image) {
-              setIdProofUri(base64ToDataUri(imgs.id_proof_image));
+            if (imgs.id_proof_front) {
+              setIdProofFrontUri(base64ToDataUri(imgs.id_proof_front));
               setCheckoutIdProof(true);
+            }
+            if (imgs.id_proof_back) {
+              setIdProofBackUri(base64ToDataUri(imgs.id_proof_back));
             }
             if (imgs.checkout_signature_date) {
               setCheckoutSignatureTime(imgs.checkout_signature_date);
               setIdProofTimestamp(imgs.checkout_signature_date);
             } else if (freshForm.date_checkout) {
               if (imgs.customer_signature) setCheckoutSignatureTime(freshForm.date_checkout);
-              if (imgs.id_proof_image) setIdProofTimestamp(freshForm.date_checkout);
+              if (imgs.id_proof_front) setIdProofTimestamp(freshForm.date_checkout);
             }
             if (imgs.checkin_customer_signature) {
               setCheckinSignatureUri(base64ToDataUri(imgs.checkin_customer_signature));
@@ -1815,35 +1821,61 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     }
   };
 
-  const openCameraForIdProof = () => {
+  const openCameraForIdProofFront = () => {
     openCamera((uri) => {
-      setIdProofUri(uri);
+      setIdProofFrontUri(uri);
       setIdProofTimestamp(new Date().toLocaleString());
       setCheckoutIdProof(true);
-      showToastMessage("ID Proof captured");
+      showToastMessage("ID Proof (Front) captured");
     });
   };
 
-  const pickFileForIdProof = async () => {
+  const pickFileForIdProofFront = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/*", "application/pdf"],
         copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets?.length > 0) {
-        setIdProofUri(result.assets[0].uri);
+        setIdProofFrontUri(result.assets[0].uri);
         setIdProofTimestamp(new Date().toLocaleString());
         setCheckoutIdProof(true);
-        showToastMessage("ID Proof file attached");
+        showToastMessage("ID Proof (Front) attached");
       }
     } catch (e) {
       Alert.alert("Error", "Could not pick file: " + e.message);
     }
   };
 
-  const removeIdProof = () => {
-    setIdProofUri(null);
-    setCheckoutIdProof(false);
+  const removeIdProofFront = () => {
+    setIdProofFrontUri(null);
+    if (!idProofBackUri) setCheckoutIdProof(false);
+  };
+
+  const openCameraForIdProofBack = () => {
+    openCamera((uri) => {
+      setIdProofBackUri(uri);
+      showToastMessage("ID Proof (Back) captured");
+    });
+  };
+
+  const pickFileForIdProofBack = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf"],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets?.length > 0) {
+        setIdProofBackUri(result.assets[0].uri);
+        showToastMessage("ID Proof (Back) attached");
+      }
+    } catch (e) {
+      Alert.alert("Error", "Could not pick file: " + e.message);
+    }
+  };
+
+  const removeIdProofBack = () => {
+    setIdProofBackUri(null);
   };
 
   const openCameraForToolPhoto = (lineIdx) => {
@@ -2214,23 +2246,45 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               )}
             </View>
 
-            {/* ID Proof Section */}
-            <Text style={ciStyles.sectionTitle}>ID PROOF <Text style={{ color: "#F44336" }}>*</Text></Text>
-            {idProofUri ? (
+            {/* ID Proof Front Section */}
+            <Text style={ciStyles.sectionTitle}>ID PROOF - FRONT <Text style={{ color: "#F44336" }}>*</Text></Text>
+            {idProofFrontUri ? (
               <View style={styles.capturedImageWrap}>
-                <Image source={{ uri: idProofUri }} style={styles.capturedIdProof} />
+                <Image source={{ uri: idProofFrontUri }} style={styles.capturedIdProof} />
                 {idProofTimestamp && <Text style={styles.photoTimestamp}>{idProofTimestamp}</Text>}
-                <TouchableOpacity style={styles.photoRemoveBtn} onPress={removeIdProof}>
+                <TouchableOpacity style={styles.photoRemoveBtn} onPress={removeIdProofFront}>
                   <Text style={styles.photoRemoveBtnText}>X</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={coStyles.idProofBtnRow}>
-                <TouchableOpacity style={coStyles.captureBtn} onPress={openCameraForIdProof}>
+                <TouchableOpacity style={coStyles.captureBtn} onPress={openCameraForIdProofFront}>
                   <Text style={{ fontSize: 22, marginBottom: 2 }}>{"\uD83D\uDCF7"}</Text>
                   <Text style={coStyles.captureBtnText}>Camera</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={coStyles.captureBtn} onPress={pickFileForIdProof}>
+                <TouchableOpacity style={coStyles.captureBtn} onPress={pickFileForIdProofFront}>
+                  <Text style={{ fontSize: 22, marginBottom: 2 }}>{"\uD83D\uDCCE"}</Text>
+                  <Text style={coStyles.captureBtnText}>Attach</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* ID Proof Back Section */}
+            <Text style={[ciStyles.sectionTitle, { marginTop: 12 }]}>ID PROOF - BACK <Text style={{ color: "#999", fontSize: 11 }}>(Optional)</Text></Text>
+            {idProofBackUri ? (
+              <View style={styles.capturedImageWrap}>
+                <Image source={{ uri: idProofBackUri }} style={styles.capturedIdProof} />
+                <TouchableOpacity style={styles.photoRemoveBtn} onPress={removeIdProofBack}>
+                  <Text style={styles.photoRemoveBtnText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={coStyles.idProofBtnRow}>
+                <TouchableOpacity style={coStyles.captureBtn} onPress={openCameraForIdProofBack}>
+                  <Text style={{ fontSize: 22, marginBottom: 2 }}>{"\uD83D\uDCF7"}</Text>
+                  <Text style={coStyles.captureBtnText}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={coStyles.captureBtn} onPress={pickFileForIdProofBack}>
                   <Text style={{ fontSize: 22, marginBottom: 2 }}>{"\uD83D\uDCCE"}</Text>
                   <Text style={coStyles.captureBtnText}>Attach</Text>
                 </TouchableOpacity>
@@ -3665,13 +3719,26 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <Text style={{ color: "#999", fontSize: 13, marginBottom: 12 }}>Not captured</Text>
               )}
 
-              {/* ID Proof */}
-              <Text style={styles.detailSectionTitle}>ID Proof</Text>
-              {idProofUri ? (
-                <TouchableOpacity onPress={() => setPreviewImageUri(idProofUri)}>
+              {/* ID Proof - Front */}
+              <Text style={styles.detailSectionTitle}>ID Proof - Front</Text>
+              {idProofFrontUri ? (
+                <TouchableOpacity onPress={() => setPreviewImageUri(idProofFrontUri)}>
                   <View style={styles.detailImageWrap}>
-                    <Image source={{ uri: idProofUri }} style={{ width: "100%", height: 220, resizeMode: "contain" }} />
+                    <Image source={{ uri: idProofFrontUri }} style={{ width: "100%", height: 220, resizeMode: "contain" }} />
                     {idProofTimestamp && <Text style={{ fontSize: 10, color: "#999", textAlign: "center", marginTop: 4 }}>Captured: {idProofTimestamp}</Text>}
+                    <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ color: "#999", fontSize: 13, marginBottom: 12 }}>Not captured</Text>
+              )}
+
+              {/* ID Proof - Back */}
+              <Text style={styles.detailSectionTitle}>ID Proof - Back</Text>
+              {idProofBackUri ? (
+                <TouchableOpacity onPress={() => setPreviewImageUri(idProofBackUri)}>
+                  <View style={styles.detailImageWrap}>
+                    <Image source={{ uri: idProofBackUri }} style={{ width: "100%", height: 220, resizeMode: "contain" }} />
                     <Text style={{ fontSize: 11, color: "#2196F3", textAlign: "center", marginTop: 4 }}>Tap to enlarge</Text>
                   </View>
                 </TouchableOpacity>

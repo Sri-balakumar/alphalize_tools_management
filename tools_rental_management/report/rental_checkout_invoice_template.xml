@@ -80,7 +80,7 @@
                                 <td><strong>Order Date:</strong></td>
                                 <td><span t-field="doc.date_order" t-options='{"widget": "date"}'/></td>
                                 <td><strong>Check-Out Date:</strong></td>
-                                <td><span t-field="doc.date_checkout" t-options='{"widget": "date"}'/></td>
+                                <td><span t-field="doc.date_checkout" t-options='{"widget": "datetime"}'/></td>
                             </tr>
                             <tr>
                                 <td><strong>Responsible:</strong></td>
@@ -342,7 +342,7 @@
                                 <td><strong>Order Date:</strong></td>
                                 <td><span t-field="doc.date_order" t-options='{"widget": "date"}'/></td>
                                 <td><strong>Check-Out Date:</strong></td>
-                                <td><span t-field="doc.date_checkout" t-options='{"widget": "date"}'/></td>
+                                <td><span t-field="doc.date_checkout" t-options='{"widget": "datetime"}'/></td>
                             </tr>
                             <tr>
                                 <td><strong>Responsible:</strong></td>

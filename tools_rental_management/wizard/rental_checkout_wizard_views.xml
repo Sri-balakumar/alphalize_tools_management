@@ -39,9 +39,14 @@
                     </group>
                     <group/>
                 </group>
-                <separator string="ID Proof (Required)"/>
+                <separator string="ID Proof - Front Side (Required)"/>
                 <group>
-                    <field name="id_proof_camera" widget="camera_file_upload"
+                    <field name="id_proof_front" widget="camera_file_upload"
+                           nolabel="1" colspan="2"/>
+                </group>
+                <separator string="ID Proof - Back Side (Optional)"/>
+                <group>
+                    <field name="id_proof_back" widget="camera_file_upload"
                            nolabel="1" colspan="2"/>
                 </group>
                 <separator string="Customer Signature (Required)"/>

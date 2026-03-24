@@ -82,11 +82,11 @@
                                 <td><strong>Order Date:</strong></td>
                                 <td><span t-field="doc.date_order" t-options='{"widget": "date"}'/></td>
                                 <td><strong>Check-Out Date:</strong></td>
-                                <td><span t-field="doc.date_checkout" t-options='{"widget": "date"}'/></td>
+                                <td><span t-field="doc.date_checkout" t-options='{"widget": "datetime"}'/></td>
                             </tr>
                             <tr>
                                 <td><strong>Check-In Date:</strong></td>
-                                <td><span t-field="doc.date_checkin" t-options='{"widget": "date"}'/></td>
+                                <td><span t-field="doc.date_checkin" t-options='{"widget": "datetime"}'/></td>
                                 <td><strong>Advance:</strong></td>
                                 <td><span t-field="doc.advance_amount"/></td>
                             </tr>
@@ -457,11 +457,11 @@
                                 <td><strong>Order Date:</strong></td>
                                 <td><span t-field="doc.date_order" t-options='{"widget": "date"}'/></td>
                                 <td><strong>Check-Out Date:</strong></td>
-                                <td><span t-field="doc.date_checkout" t-options='{"widget": "date"}'/></td>
+                                <td><span t-field="doc.date_checkout" t-options='{"widget": "datetime"}'/></td>
                             </tr>
                             <tr>
                                 <td><strong>Check-In Date:</strong></td>
-                                <td><span t-field="doc.date_checkin" t-options='{"widget": "date"}'/></td>
+                                <td><span t-field="doc.date_checkin" t-options='{"widget": "datetime"}'/></td>
                                 <td><strong>Advance:</strong></td>
                                 <td><span t-field="doc.advance_amount"/></td>
                             </tr>

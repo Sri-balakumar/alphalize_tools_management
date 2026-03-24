@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Inherit the partner tree view to add js_class for Delete button -->
+    <record id="view_partner_tree_inherit_delete" model="ir.ui.view">
+        <field name="name">res.partner.tree.inherit.delete</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="js_class">contact_list_delete</attribute>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
