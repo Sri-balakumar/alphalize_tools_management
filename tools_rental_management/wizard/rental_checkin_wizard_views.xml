@@ -98,6 +98,14 @@
                         </group>
                     </group>
                 </div>
+                <separator string="Payment Method"/>
+                <group>
+                    <group>
+                        <field name="checkin_payment_method" string="Payment Method"
+                               required="1"/>
+                    </group>
+                    <group/>
+                </group>
                 <separator string="Customer Signature (Required)"/>
                 <group>
                     <field name="checkin_customer_signature" widget="signature"

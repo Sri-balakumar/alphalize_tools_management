@@ -29,6 +29,12 @@ class RentalCheckoutWizard(models.TransientModel):
     advance_amount = fields.Monetary(
         string='Advance Amount', currency_field='currency_id',
         help='Advance amount collected from the customer at checkout.')
+    payment_method = fields.Selection([
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('bank', 'Bank'),
+        ('credit', 'Credit'),
+    ], string='Payment Method')
 
     @api.onchange('order_id')
     def _onchange_order_id(self):
@@ -63,9 +69,11 @@ class RentalCheckoutWizard(models.TransientModel):
         if self.id_proof_back:
             order_vals['id_proof_back'] = self.id_proof_back
 
-        # Save advance amount if entered
+        # Save advance amount and payment method if entered
         if self.advance_amount > 0:
             order_vals['advance_amount'] = self.advance_amount
+            if self.payment_method:
+                order_vals['payment_method'] = self.payment_method
 
         self.order_id.write(order_vals)
 

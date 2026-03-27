@@ -96,6 +96,12 @@
                                 <td></td>
                                 <td></td>
                             </tr>
+                            <tr t-if="doc.checkin_payment_method">
+                                <td><strong>Payment Method:</strong></td>
+                                <td><span t-field="doc.checkin_payment_method"/></td>
+                                <td></td>
+                                <td></td>
+                            </tr>
                         </table>
 
                         <!-- Late Return Warning -->
@@ -278,6 +284,14 @@
                                         <tr>
                                             <td><strong>Advance:</strong></td>
                                             <td><span t-field="doc.advance_amount"/></td>
+                                        </tr>
+                                        <tr t-if="doc.payment_method">
+                                            <td><strong>Checkout Payment:</strong></td>
+                                            <td><span t-field="doc.payment_method"/></td>
+                                        </tr>
+                                        <tr t-if="doc.checkin_payment_method">
+                                            <td><strong>Check-In Payment:</strong></td>
+                                            <td><span t-field="doc.checkin_payment_method"/></td>
                                         </tr>
                                         <tr>
                                             <td><strong>Returned:</strong></td>
@@ -471,6 +485,12 @@
                                 <td></td>
                                 <td></td>
                             </tr>
+                            <tr t-if="doc.checkin_payment_method">
+                                <td><strong>Payment Method:</strong></td>
+                                <td><span t-field="doc.checkin_payment_method"/></td>
+                                <td></td>
+                                <td></td>
+                            </tr>
                         </table>
 
                         <!-- Late Return Warning -->
@@ -653,6 +673,14 @@
                                         <tr>
                                             <td><strong>Advance:</strong></td>
                                             <td><span t-field="doc.advance_amount"/></td>
+                                        </tr>
+                                        <tr t-if="doc.payment_method">
+                                            <td><strong>Checkout Payment:</strong></td>
+                                            <td><span t-field="doc.payment_method"/></td>
+                                        </tr>
+                                        <tr t-if="doc.checkin_payment_method">
+                                            <td><strong>Check-In Payment:</strong></td>
+                                            <td><span t-field="doc.checkin_payment_method"/></td>
                                         </tr>
                                         <tr>
                                             <td><strong>Returned:</strong></td>

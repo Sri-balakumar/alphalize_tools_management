@@ -88,7 +88,19 @@ class RentalOrder(models.Model):
     subtotal = fields.Monetary(
         string='Subtotal', compute='_compute_totals', store=True)
     advance_amount = fields.Monetary(string='Advance Collected')
+    payment_method = fields.Selection([
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('bank', 'Bank'),
+        ('credit', 'Credit'),
+    ], string='Payment Method')
     advance_returned = fields.Boolean(string='Advance Returned', default=False)
+    checkin_payment_method = fields.Selection([
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('bank', 'Bank'),
+        ('credit', 'Credit'),
+    ], string='Check-In Payment Method')
     late_fee = fields.Monetary(
         string='Late Fees', compute='_compute_totals', store=True)
     damage_charges = fields.Monetary(string='Damage Charges')
@@ -168,6 +180,10 @@ class RentalOrder(models.Model):
         help='Date & time the discount was authorized and applied.')
 
     # -- Datetime Display (formatted Char for reliable readonly display) --
+    checkout_time_display = fields.Char(
+        string='Check-Out Time', compute='_compute_date_displays', store=False)
+    checkin_time_display = fields.Char(
+        string='Check-In Time', compute='_compute_date_displays', store=False)
     checkout_signature_date_display = fields.Char(
         string='Signed On', compute='_compute_date_displays', store=False)
     checkin_customer_signature_date_display = fields.Char(
@@ -216,19 +232,25 @@ class RentalOrder(models.Model):
             else:
                 order.actual_duration = 0
 
-    @api.depends('checkout_signature_date', 'checkin_customer_signature_date',
+    @api.depends('date_checkout', 'date_checkin',
+                 'checkout_signature_date', 'checkin_customer_signature_date',
                  'checkin_signature_date', 'discount_applied_date')
     def _compute_date_displays(self):
         import pytz
         fmt = '%d/%m/%Y %I:%M %p'
+        time_fmt = '%I:%M %p'
         user_tz = pytz.timezone(self.env.user.tz or 'UTC')
-        def _fmt(dt):
+        def _fmt(dt, use_fmt=None):
             if not dt:
                 return ''
             utc_dt = pytz.utc.localize(dt.replace(tzinfo=None))
             local_dt = utc_dt.astimezone(user_tz)
-            return local_dt.strftime(fmt)
+            return local_dt.strftime(use_fmt or fmt)
         for order in self:
+            order.checkout_time_display = _fmt(
+                order.date_checkout, time_fmt)
+            order.checkin_time_display = _fmt(
+                order.date_checkin, time_fmt)
             order.checkout_signature_date_display = _fmt(
                 order.checkout_signature_date)
             order.checkin_customer_signature_date_display = _fmt(

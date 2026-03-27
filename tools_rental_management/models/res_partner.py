@@ -1,9 +1,18 @@
-from odoo import models, api, _
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
+
+    id_proof_front = fields.Binary(
+        string='ID Proof - Front', copy=False,
+        attachment=True,
+        help='Front side of the customer ID proof.')
+    id_proof_back = fields.Binary(
+        string='ID Proof - Back', copy=False,
+        attachment=True,
+        help='Back side of the customer ID proof.')
 
     def action_force_delete(self):
         """Force delete selected partners by removing all dependent records first."""

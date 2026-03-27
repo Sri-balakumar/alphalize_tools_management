@@ -86,6 +86,18 @@ const today = () => {
 };
 const todayISO = () => new Date().toISOString().split("T")[0];
 
+// Extract time portion from a datetime string (Odoo format or JS locale string)
+const formatTime = (dtStr) => {
+  if (!dtStr) return "";
+  try {
+    const d = new Date(dtStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+  } catch {
+    return "";
+  }
+};
+
 // Convert a local file URI to base64 string for Odoo Binary fields
 const uriToBase64 = async (uri) => {
   if (!uri) return false;
@@ -154,7 +166,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     rental_duration: existingOrder?.rental_duration?.toString() || "1",
     actual_duration: existingOrder?.actual_duration || "",
     advance_amount: existingOrder?.advance_amount?.toString() || "0.00",
+    payment_method: existingOrder?.payment_method || "",
     advance_returned: existingOrder?.advance_returned || false,
+    checkin_payment_method: existingOrder?.checkin_payment_method || "",
     damage_charges: existingOrder?.damage_charges?.toString() || "0",
     discount_amount: existingOrder?.discount_amount?.toString() || "0",
     notes: existingOrder?.notes || "",
@@ -628,6 +642,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             rental_period_type: form.rental_period_type,
             rental_duration: parseFloat(form.rental_duration) || 1,
             advance_amount: parseFloat(form.advance_amount) || 0,
+            payment_method: form.payment_method || false,
             notes: form.notes || "",
             terms: form.terms || "",
           };
@@ -688,6 +703,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Required", "Please provide customer signature for check-out");
       return;
     }
+    if (parseFloat(form.advance_amount || 0) > 0 && !form.payment_method) {
+      Alert.alert("Required", "Please select a payment method for the advance amount");
+      return;
+    }
     // Optimistic: close modal and update UI immediately
     setShowCheckoutModal(false);
     savedRef.current = true;
@@ -721,7 +740,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           // 3. Save order-level values
           const orderVals = {};
           const advanceAmt = parseFloat(form.advance_amount) || 0;
-          if (advanceAmt > 0) orderVals.advance_amount = advanceAmt;
+          if (advanceAmt > 0) {
+            orderVals.advance_amount = advanceAmt;
+            if (form.payment_method) orderVals.payment_method = form.payment_method;
+          }
           if (sigB64) orderVals.customer_signature = sigB64;
           if (idFrontB64) orderVals.id_proof_front = idFrontB64;
           if (idBackB64) orderVals.id_proof_back = idBackB64;
@@ -871,6 +893,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       Alert.alert("Required", "Set condition for all returning tools before check-in");
       return;
     }
+    if (!form.checkin_payment_method) {
+      Alert.alert("Required", "Please select a payment method for check-in");
+      return;
+    }
     if (!checkinSignatureUri) {
       Alert.alert("Required", "Customer signature is mandatory for check-in");
       return;
@@ -887,9 +913,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     setSaving(true);
     try {
       if (odooOrderId && odooAuth) {
-        // Save checkin values (advance_returned, images/signatures) FIRST
+        // Save checkin values (advance_returned, payment method, images/signatures) FIRST
         const checkinVals = {};
         if (!isPartial) checkinVals.advance_returned = checkinReturnAdvance;
+        if (form.checkin_payment_method) checkinVals.checkin_payment_method = form.checkin_payment_method;
         // Convert all images to base64 in parallel
         const [custSigB64, authSigB64, ...checkinLineB64s] = await Promise.all([
           uriToBase64(checkinSignatureUri),
@@ -1127,6 +1154,16 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td><strong>Advance Collected:</strong></td>
         <td>${cur}${advance.toFixed(3)}</td>
       </tr>`}
+      ${form.payment_method ? `<tr>
+        <td><strong>${isCheckin ? "Checkout Payment:" : "Payment Method:"}</strong></td>
+        <td>${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td>
+        <td></td><td></td>
+      </tr>` : ""}
+      ${isCheckin && form.checkin_payment_method ? `<tr>
+        <td><strong>Check-In Payment:</strong></td>
+        <td>${form.checkin_payment_method.charAt(0).toUpperCase() + form.checkin_payment_method.slice(1)}</td>
+        <td></td><td></td>
+      </tr>` : ""}
       <tr>
         <td><strong>Responsible:</strong></td>
         <td>${form.responsible || "Admin"}</td>
@@ -1164,10 +1201,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
     ${isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin-top:${isA5 ? "3px" : "10px"}">
       <tr><td><strong>Advance:</strong></td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr>
+      ${form.payment_method ? `<tr><td><strong>Checkout Payment:</strong></td><td class="text-end">${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td></tr>` : ""}
+      ${form.checkin_payment_method ? `<tr><td><strong>Check-In Payment:</strong></td><td class="text-end">${form.checkin_payment_method.charAt(0).toUpperCase() + form.checkin_payment_method.slice(1)}</td></tr>` : ""}
       <tr><td><strong>Returned:</strong></td><td class="text-end">${form.advance_returned ? "Yes" : "No"}</td></tr>
     </table>` : ""}
 
-    ${!isCheckin && advance > 0 ? `<table class="totals"><tr><td>Advance Collected:</td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr></table>` : ""}
+    ${!isCheckin && advance > 0 ? `<table class="totals"><tr><td>Advance Collected:</td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr>${form.payment_method ? `<tr><td>Payment Method:</td><td class="text-end">${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td></tr>` : ""}</table>` : ""}
 
     ${!isCheckin ? `<div style="margin-top:${isA5 ? "3px" : "8px"};border-top:1px solid #ccc;padding-top:${isA5 ? "2px" : "6px"};">
       <h5 style="margin:0 0 ${isA5 ? "1px" : "4px"} 0;font-size:${isA5 ? "6.5px" : "10px"};">Terms &amp; Conditions / الشروط والأحكام</h5>
@@ -1454,6 +1493,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         rental_period_type: form.rental_period_type,
         rental_duration: parseFloat(form.rental_duration) || 1,
         advance_amount: parseFloat(form.advance_amount) || 0,
+        payment_method: form.payment_method || false,
         notes: form.notes || "",
         terms: form.terms || "",
       };
@@ -1628,7 +1668,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             rental_duration: fresh.rental_duration?.toString() || "1",
             actual_duration: fresh.actual_duration || "",
             advance_amount: fresh.advance_amount?.toString() || "0",
+            payment_method: fresh.payment_method || "",
             advance_returned: fresh.advance_returned || false,
+            checkin_payment_method: fresh.checkin_payment_method || "",
             damage_charges: fresh.damage_charges?.toString() || "0",
             discount_amount: fresh.discount_amount?.toString() || "0",
             notes: fresh.notes || "",
@@ -1782,6 +1824,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           rental_period_type: curForm.rental_period_type,
           rental_duration: parseFloat(curForm.rental_duration) || 1,
           advance_amount: parseFloat(curForm.advance_amount) || 0,
+          payment_method: curForm.payment_method || false,
           notes: curForm.notes || "",
           terms: curForm.terms || "",
         };
@@ -2228,6 +2271,24 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 keyboardType="decimal-pad"
                 column
               />
+              {parseFloat(form.advance_amount || 0) > 0 && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={ciStyles.fieldLabel}>Payment Method <Text style={{ color: "#F44336" }}>*</Text></Text>
+                  <View style={styles.chipRow}>
+                    {[{ label: "Cash", value: "cash" }, { label: "Card", value: "card" }, { label: "Bank", value: "bank" }, { label: "Credit", value: "credit" }].map((pm) => (
+                      <TouchableOpacity
+                        key={pm.value}
+                        style={[styles.condChip, form.payment_method === pm.value && styles.condChipActive]}
+                        onPress={() => handleChange("payment_method", pm.value)}
+                      >
+                        <Text style={[styles.condChipText, form.payment_method === pm.value && styles.condChipTextActive]}>
+                          {pm.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* Totals Card */}
@@ -2601,6 +2662,24 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               <View style={ciStyles.totalRow}>
                 <Text style={ciStyles.totalLabel}>Total Damage Charges</Text>
                 <Text style={ciStyles.totalValue}>ر.ع.{lines.filter((_, i) => !checkinExcludedIdx.includes(i)).reduce((sum, l) => sum + (parseFloat(l.damage_charge) || 0), 0).toFixed(3)}</Text>
+              </View>
+            </View>
+
+            {/* Payment Method */}
+            <Text style={ciStyles.sectionTitle}>PAYMENT METHOD <Text style={{ color: "#F44336" }}>*</Text></Text>
+            <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: "#e0e0e0" }}>
+              <View style={styles.chipRow}>
+                {[{ label: "Cash", value: "cash" }, { label: "Card", value: "card" }, { label: "Bank", value: "bank" }, { label: "Credit", value: "credit" }].map((pm) => (
+                  <TouchableOpacity
+                    key={pm.value}
+                    style={[styles.condChip, form.checkin_payment_method === pm.value && styles.condChipActive]}
+                    onPress={() => handleChange("checkin_payment_method", pm.value)}
+                  >
+                    <Text style={[styles.condChipText, form.checkin_payment_method === pm.value && styles.condChipTextActive]}>
+                      {pm.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
 
@@ -3384,10 +3463,16 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <View style={styles.colHalf}>
                   <Text style={styles.infoLabel}>Actual Check-Out</Text>
                   <Text style={[styles.infoValue, { marginTop: 2, color: "#1565C0" }]}>{form.date_checkout || "-"}</Text>
+                  {formatTime(form.date_checkout_raw || form.date_checkout) ? (
+                    <Text style={[styles.infoValue, { marginTop: 1, color: "#1565C0", fontSize: 13, fontWeight: "700" }]}>{formatTime(form.date_checkout_raw || form.date_checkout)}</Text>
+                  ) : null}
                 </View>
                 <View style={styles.colHalf}>
                   <Text style={styles.infoLabel}>Actual Check-In</Text>
                   <Text style={[styles.infoValue, { marginTop: 2, color: "#4CAF50" }]}>{form.date_checkin || "-"}</Text>
+                  {formatTime(form.date_checkin) ? (
+                    <Text style={[styles.infoValue, { marginTop: 1, color: "#4CAF50", fontSize: 13, fontWeight: "700" }]}>{formatTime(form.date_checkin)}</Text>
+                  ) : null}
                 </View>
               </View>
               <View style={[styles.infoRow, { marginTop: 8 }]}>
@@ -3658,6 +3743,18 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       </Text>
                     </View>
                   )}
+                  {form.payment_method ? (
+                    <View style={styles.lineTotalRow}>
+                      <Text style={styles.lineTotalLabel}>Checkout Payment</Text>
+                      <Text style={styles.lineTotalValue}>{form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</Text>
+                    </View>
+                  ) : null}
+                  {form.checkin_payment_method ? (
+                    <View style={styles.lineTotalRow}>
+                      <Text style={styles.lineTotalLabel}>Check-In Payment</Text>
+                      <Text style={styles.lineTotalValue}>{form.checkin_payment_method.charAt(0).toUpperCase() + form.checkin_payment_method.slice(1)}</Text>
+                    </View>
+                  ) : null}
                   <View style={[styles.lineTotalRow, styles.grandTotalRow, { borderTopWidth: 2, borderTopColor: "#333", marginTop: 8, paddingTop: 8 }]}>
                     <Text style={styles.grandTotalLabel}>TOTAL</Text>
                     <Text style={styles.grandTotalValue}>ر.ع.{calcTotal().toFixed(3)}</Text>

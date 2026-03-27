@@ -67,6 +67,13 @@ class RentalCheckinWizard(models.TransientModel):
     original_line_count = fields.Integer(
         string='Original Line Count',
         help='Number of lines when wizard was created, used to detect removed lines.')
+    # Payment method at check-in
+    checkin_payment_method = fields.Selection([
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('bank', 'Bank'),
+        ('credit', 'Credit'),
+    ], string='Payment Method')
     # Customer signature at check-in
     checkin_customer_signature = fields.Binary(
         string='Customer Signature')
@@ -334,13 +341,16 @@ class RentalCheckinWizard(models.TransientModel):
 
         # Save customer + authority signatures with timestamps
         now = fields.Datetime.now()
-        self.order_id.write({
+        checkin_vals = {
             'checkin_customer_signature': self.checkin_customer_signature,
             'checkin_customer_signature_date': now,
             'checkin_signature': self.customer_signature,
             'checkin_signature_date': now,
             'checkin_signer_name': self.customer_name,
-        })
+        }
+        if self.checkin_payment_method:
+            checkin_vals['checkin_payment_method'] = self.checkin_payment_method
+        self.order_id.write(checkin_vals)
 
         # Handle advance
         if self.return_advance and self.order_id.advance_amount:

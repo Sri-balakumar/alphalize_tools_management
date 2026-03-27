@@ -153,8 +153,8 @@ const ORDER_FIELDS = [
   "name", "state", "partner_id", "partner_phone", "partner_email",
   "date_order", "date_planned_checkout", "date_planned_checkin",
   "date_checkout", "date_checkin", "rental_period_type", "rental_duration",
-  "actual_duration", "actual_duration_display", "advance_amount",
-  "advance_returned", "amount_due", "subtotal", "late_fee", "damage_charges",
+  "actual_duration", "actual_duration_display", "advance_amount", "payment_method",
+  "advance_returned", "checkin_payment_method", "amount_due", "subtotal", "late_fee", "damage_charges",
   "discount_amount", "discount_authorized_by", "total_amount",
   "invoice_id", "invoice_state", "notes", "terms",
   "is_late", "user_id", "customer_code",
@@ -508,7 +508,9 @@ const mapOrder = (r, lines = [], timesheet = []) => ({
   date_checkout_raw: r.date_checkout || "",
   date_checkin_raw: r.date_checkin || "",
   advance_amount: String(r.advance_amount || 0),
+  payment_method: r.payment_method || "",
   advance_returned: r.advance_returned || false,
+  checkin_payment_method: r.checkin_payment_method || "",
   amount_due: r.amount_due || 0,
   invoice_id: r.invoice_id ? r.invoice_id[0] : null,
   invoice_state: r.invoice_state || false,
@@ -583,7 +585,7 @@ export const fetchCustomers = async (auth) => {
     auth,
     "res.partner",
     ["|", ["customer_rank", ">", 0], ["is_company", "=", false]],
-    ["name", "phone", "email", "customer_rank", "street", "city"],
+    ["name", "phone", "email", "customer_rank", "street", "city", "id_proof_front", "id_proof_back"],
     { order: "name", limit: 200 }
   );
   return records.map((r) => ({
@@ -595,6 +597,8 @@ export const fetchCustomers = async (auth) => {
     email: r.email || "",
     rental_count: 0,
     total_revenue: "0",
+    id_proof_front: r.id_proof_front || false,
+    id_proof_back: r.id_proof_back || false,
   }));
 };
 
@@ -640,7 +644,17 @@ export const updateCustomer = async (auth, customerId, values) => {
   if (values.name !== undefined) {
     odooValues.name = values.name;
   }
+  if (values.id_proof_front !== undefined) {
+    odooValues.id_proof_front = values.id_proof_front || false;
+  }
+  if (values.id_proof_back !== undefined) {
+    odooValues.id_proof_back = values.id_proof_back || false;
+  }
   await odooWrite(auth, "res.partner", [customerId], odooValues);
+};
+
+export const deleteCustomer = async (auth, customerId) => {
+  return odooCallMethod(auth, "res.partner", "action_force_delete", [customerId]);
 };
 
 // =============================================
@@ -778,6 +792,7 @@ export default {
   fetchCustomers,
   createCustomer,
   updateCustomer,
+  deleteCustomer,
   fetchPricingRules,
   updatePricingRule,
   fetchToolReport,

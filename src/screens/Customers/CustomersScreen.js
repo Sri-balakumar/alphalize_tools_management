@@ -11,8 +11,10 @@ import {
   TextInput as RNTextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView, RoundedContainer } from "@components/containers";
 import NavigationHeader from "@components/Header/NavigationHeader";
 import { TextInput } from "@components/common/TextInput";
@@ -98,6 +100,7 @@ const CustomersScreen = ({ navigation }) => {
   const odooAuth = useAuthStore((s) => s.odooAuth);
   const customers = useToolStore((s) => s.customers);
   const fetchCustomers = useToolStore((s) => s.fetchCustomers);
+  const deleteCustomerFromStore = useToolStore((s) => s.deleteCustomer);
   const [search, setSearch] = useState("");
 
   // Edit modal state
@@ -108,6 +111,13 @@ const CustomersScreen = ({ navigation }) => {
   const [editEmail, setEditEmail] = useState("");
   const [editCountryCode, setEditCountryCode] = useState("+968");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // ID Proof state
+  const [editIdProofFront, setEditIdProofFront] = useState(null);
+  const [editIdProofBack, setEditIdProofBack] = useState(null);
+  const [idProofFrontChanged, setIdProofFrontChanged] = useState(false);
+  const [idProofBackChanged, setIdProofBackChanged] = useState(false);
 
   // Country picker state
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -156,7 +166,83 @@ const CustomersScreen = ({ navigation }) => {
     setEditPhone(local);
     setEditCountryCode(code);
     setEditEmail(customer.email || "");
+    setEditIdProofFront(customer.id_proof_front || null);
+    setEditIdProofBack(customer.id_proof_back || null);
+    setIdProofFrontChanged(false);
+    setIdProofBackChanged(false);
     setShowEditModal(true);
+  };
+
+  const pickIdProof = async (side) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]?.base64) {
+      if (side === "front") {
+        setEditIdProofFront(result.assets[0].base64);
+        setIdProofFrontChanged(true);
+      } else {
+        setEditIdProofBack(result.assets[0].base64);
+        setIdProofBackChanged(true);
+      }
+    }
+  };
+
+  const captureIdProof = async (side) => {
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]?.base64) {
+      if (side === "front") {
+        setEditIdProofFront(result.assets[0].base64);
+        setIdProofFrontChanged(true);
+      } else {
+        setEditIdProofBack(result.assets[0].base64);
+        setIdProofBackChanged(true);
+      }
+    }
+  };
+
+  const showIdProofOptions = (side) => {
+    Alert.alert(
+      `ID Proof - ${side === "front" ? "Front" : "Back"}`,
+      "Choose an option",
+      [
+        { text: "Camera", onPress: () => captureIdProof(side) },
+        { text: "Gallery", onPress: () => pickIdProof(side) },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
+  const handleDelete = () => {
+    if (!editCustomer || !odooAuth) return;
+    Alert.alert(
+      "Delete Customer",
+      `Are you sure you want to delete "${editCustomer.name}"? This will also delete all related rental orders and invoices. This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            const custId = editCustomer.odoo_id || parseInt(editCustomer.id);
+            try {
+              await deleteCustomerFromStore(odooAuth, custId);
+              setShowEditModal(false);
+            } catch (e) {
+              Alert.alert("Error", "Failed to delete: " + e.message);
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handlePhoneChange = useCallback((text) => {
@@ -177,6 +263,12 @@ const CustomersScreen = ({ navigation }) => {
       phone: editPhone ? editCountryCode + editPhone : "",
       email: editEmail.trim(),
     };
+    if (idProofFrontChanged) {
+      updatedFields.id_proof_front = editIdProofFront || false;
+    }
+    if (idProofBackChanged) {
+      updatedFields.id_proof_back = editIdProofBack || false;
+    }
     // Optimistically update the local list instantly
     const custId = editCustomer.odoo_id || parseInt(editCustomer.id);
     useToolStore.setState((state) => ({
@@ -322,12 +414,86 @@ const CustomersScreen = ({ navigation }) => {
                   </TouchableOpacity>
                 )}
 
+                {/* ID Proof Front */}
+                <Text style={[styles.fieldLabel, { marginTop: 16 }]}>ID Proof - Front</Text>
+                {editIdProofFront ? (
+                  <View style={styles.idProofContainer}>
+                    <Image
+                      source={{ uri: `data:image/png;base64,${editIdProofFront}` }}
+                      style={styles.idProofImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.idProofActions}>
+                      <TouchableOpacity
+                        onPress={() => showIdProofOptions("front")}
+                        style={styles.idProofChangeBtn}
+                      >
+                        <Text style={styles.idProofChangeBtnText}>Change</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => { setEditIdProofFront(null); setIdProofFrontChanged(true); }}
+                        style={[styles.idProofChangeBtn, { backgroundColor: "#E53935" }]}
+                      >
+                        <Text style={styles.idProofChangeBtnText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => showIdProofOptions("front")}
+                    style={styles.idProofUploadBtn}
+                  >
+                    <Text style={styles.idProofUploadText}>+ Capture / Upload Front</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* ID Proof Back */}
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>ID Proof - Back</Text>
+                {editIdProofBack ? (
+                  <View style={styles.idProofContainer}>
+                    <Image
+                      source={{ uri: `data:image/png;base64,${editIdProofBack}` }}
+                      style={styles.idProofImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.idProofActions}>
+                      <TouchableOpacity
+                        onPress={() => showIdProofOptions("back")}
+                        style={styles.idProofChangeBtn}
+                      >
+                        <Text style={styles.idProofChangeBtnText}>Change</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => { setEditIdProofBack(null); setIdProofBackChanged(true); }}
+                        style={[styles.idProofChangeBtn, { backgroundColor: "#E53935" }]}
+                      >
+                        <Text style={styles.idProofChangeBtnText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => showIdProofOptions("back")}
+                    style={styles.idProofUploadBtn}
+                  >
+                    <Text style={styles.idProofUploadText}>+ Capture / Upload Back</Text>
+                  </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
                   onPress={handleSave}
                   disabled={isSaveDisabled}
                   style={[styles.saveBtn, isSaveDisabled && { opacity: 0.4 }]}
                 >
                   <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save"}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  disabled={deleting}
+                  style={[styles.deleteBtn, deleting && { opacity: 0.4 }]}
+                >
+                  <Text style={styles.deleteBtnText}>{deleting ? "Deleting..." : "Delete Customer"}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.cancelBtn}>
@@ -559,6 +725,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
+  deleteBtn: {
+    backgroundColor: "#E53935",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  deleteBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
   cancelBtn: {
     paddingVertical: 12,
     alignItems: "center",
@@ -567,6 +745,49 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     color: "#666",
     fontSize: 14,
+    fontWeight: "600",
+  },
+  idProofContainer: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#fafafa",
+  },
+  idProofImage: {
+    width: "100%",
+    height: 160,
+    backgroundColor: "#f0f0f0",
+  },
+  idProofActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  idProofChangeBtn: {
+    backgroundColor: "#1565C0",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  idProofChangeBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  idProofUploadBtn: {
+    borderWidth: 1.5,
+    borderColor: "#1565C0",
+    borderStyle: "dashed",
+    borderRadius: 8,
+    paddingVertical: 20,
+    alignItems: "center",
+    backgroundColor: "#F5F8FF",
+  },
+  idProofUploadText: {
+    color: "#1565C0",
+    fontSize: 13,
     fontWeight: "600",
   },
 });

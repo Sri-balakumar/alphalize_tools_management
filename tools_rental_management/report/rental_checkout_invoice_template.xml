@@ -88,6 +88,12 @@
                                 <td><strong>Advance Collected:</strong></td>
                                 <td><span t-field="doc.advance_amount"/></td>
                             </tr>
+                            <tr t-if="doc.payment_method">
+                                <td><strong>Payment Method:</strong></td>
+                                <td><span t-field="doc.payment_method"/></td>
+                                <td/>
+                                <td/>
+                            </tr>
                         </table>
 
                         <!-- Tools Table -->
@@ -162,6 +168,10 @@
                                     <tr t-if="doc.advance_amount">
                                         <td>Advance Collected:</td>
                                         <td class="text-end"><span t-field="doc.advance_amount"/></td>
+                                    </tr>
+                                    <tr t-if="doc.payment_method">
+                                        <td>Payment Method:</td>
+                                        <td class="text-end"><span t-field="doc.payment_method"/></td>
                                     </tr>
                                     <tr class="grand-row">
                                         <td><strong>TOTAL:</strong></td>
@@ -350,6 +360,12 @@
                                 <td><strong>Advance Collected:</strong></td>
                                 <td><span t-field="doc.advance_amount"/></td>
                             </tr>
+                            <tr t-if="doc.payment_method">
+                                <td><strong>Payment Method:</strong></td>
+                                <td><span t-field="doc.payment_method"/></td>
+                                <td/>
+                                <td/>
+                            </tr>
                         </table>
 
                         <!-- Tools Table -->
@@ -424,6 +440,10 @@
                                     <tr t-if="doc.advance_amount">
                                         <td>Advance Collected:</td>
                                         <td class="text-end"><span t-field="doc.advance_amount"/></td>
+                                    </tr>
+                                    <tr t-if="doc.payment_method">
+                                        <td>Payment Method:</td>
+                                        <td class="text-end"><span t-field="doc.payment_method"/></td>
                                     </tr>
                                     <tr class="grand-row">
                                         <td><strong>TOTAL:</strong></td>

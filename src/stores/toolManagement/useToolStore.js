@@ -17,6 +17,7 @@ import {
   markDone as apiMarkDone,
   createInvoice as apiCreateInvoice,
   createCustomer as apiCreateCustomer,
+  deleteCustomer as apiDeleteCustomer,
   openCheckoutWizard as apiCheckoutOrder,
   openCheckinWizard as apiCheckinOrder,
 } from "@api/services/odooService";
@@ -223,6 +224,12 @@ const useToolStore = create(
         invalidate("customers");
         await get().fetchCustomers(auth, true);
         return newId;
+      },
+
+      deleteCustomer: async (auth, customerId) => {
+        await apiDeleteCustomer(auth, customerId);
+        invalidate("customers");
+        await get().fetchCustomers(auth, true);
       },
 
       // =============================================

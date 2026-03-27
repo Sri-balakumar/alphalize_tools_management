@@ -101,11 +101,19 @@
                     <group invisible="state in ('draft', 'confirmed')">
                         <group string="Check-Out / Check-In">
                             <field name="date_checkout" readonly="1"/>
+                            <field name="checkout_time_display" readonly="1"
+                                   string="Check-Out Time"
+                                   invisible="not date_checkout"/>
                             <field name="date_checkin" readonly="1"/>
+                            <field name="checkin_time_display" readonly="1"
+                                   string="Check-In Time"
+                                   invisible="not date_checkin"/>
                             <field name="actual_duration_display" readonly="1" string="Duration"/>
                         </group>
                         <group string="Financials">
                             <field name="advance_amount" readonly="1"
+                                   invisible="advance_amount == 0"/>
+                            <field name="payment_method" readonly="1"
                                    invisible="advance_amount == 0"/>
                             <field name="late_fee" readonly="1" string="Late Fees"
                                    invisible="late_fee == 0"/>
@@ -173,6 +181,12 @@
                                        string="Total"/>
                                 <field name="advance_amount" string="Advance Paid (-)"
                                        invisible="advance_amount == 0 or advance_returned"/>
+                                <field name="payment_method" string="Checkout Payment"
+                                       readonly="1"
+                                       invisible="not payment_method"/>
+                                <field name="checkin_payment_method" string="Check-In Payment"
+                                       readonly="1"
+                                       invisible="not checkin_payment_method"/>
                                 <field name="amount_due"
                                        class="oe_subtotal_footer_separator"
                                        string="Amount Due"
@@ -204,6 +218,8 @@
                                            string="Customer ID"/>
                                     <field name="date_checkout" readonly="1"
                                            string="Check-Out Date"/>
+                                    <field name="checkout_time_display" readonly="1"
+                                           string="Check-Out Time"/>
                                     <field name="checkout_signature_date_display" readonly="1"
                                            string="Signed On"/>
                                     <field name="user_id" readonly="1"
@@ -218,6 +234,8 @@
                                            string="Planned Return"/>
                                     <field name="advance_amount" readonly="1"
                                            string="Advance Collected"
+                                           invisible="advance_amount == 0"/>
+                                    <field name="payment_method" readonly="1"
                                            invisible="advance_amount == 0"/>
                                 </group>
                             </group>
@@ -279,6 +297,8 @@
                                            string="Customer ID"/>
                                     <field name="date_checkin" readonly="1"
                                            string="Check-In Date"/>
+                                    <field name="checkin_time_display" readonly="1"
+                                           string="Check-In Time"/>
                                     <field name="actual_duration_display" readonly="1"
                                            string="Actual Duration"/>
                                     <field name="user_id" readonly="1"
@@ -288,9 +308,13 @@
                                     <field name="advance_amount" readonly="1"
                                            invisible="advance_amount == 0"
                                            string="Advance Collected"/>
+                                    <field name="payment_method" readonly="1"
+                                           invisible="advance_amount == 0"/>
                                     <field name="advance_returned" readonly="1"
                                            invisible="advance_amount == 0"
                                            string="Advance Returned"/>
+                                    <field name="checkin_payment_method" readonly="1"
+                                           string="Check-In Payment Method"/>
                                     <field name="late_fee" readonly="1"
                                            string="Total Late Fees"
                                            invisible="late_fee == 0"/>
@@ -339,6 +363,12 @@
                                        string="Total"/>
                                 <field name="advance_amount" string="Advance Paid (-)"
                                        invisible="advance_amount == 0 or advance_returned"/>
+                                <field name="payment_method" string="Checkout Payment"
+                                       readonly="1"
+                                       invisible="not payment_method"/>
+                                <field name="checkin_payment_method" string="Check-In Payment"
+                                       readonly="1"
+                                       invisible="not checkin_payment_method"/>
                                 <field name="amount_due"
                                        class="oe_subtotal_footer_separator"
                                        string="Amount Due"

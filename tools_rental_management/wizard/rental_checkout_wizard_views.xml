@@ -35,6 +35,9 @@
                 <group>
                     <group>
                         <field name="advance_amount" string="Advance Amount"/>
+                        <field name="payment_method" string="Payment Method"
+                               invisible="advance_amount == 0"
+                               required="advance_amount > 0"/>
                         <field name="currency_id" invisible="1"/>
                     </group>
                     <group/>
