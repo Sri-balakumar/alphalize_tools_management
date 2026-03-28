@@ -3,7 +3,7 @@
 
 export const ODOO_CONFIG = {
   // Your PC IP on the LAN (where Odoo is running)
-  HOST: "10.66.3.175",
+  HOST: "192.168.29.78",
   PORT: 8069,
   DATABASE: "testing1",
   PROTOCOL: "http",

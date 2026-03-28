@@ -167,8 +167,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     actual_duration: existingOrder?.actual_duration || "",
     advance_amount: existingOrder?.advance_amount?.toString() || "0.00",
     payment_method: existingOrder?.payment_method || "",
+    cash_received: existingOrder?.cash_received?.toString() || "",
     advance_returned: existingOrder?.advance_returned || false,
     checkin_payment_method: existingOrder?.checkin_payment_method || "",
+    checkin_cash_received: existingOrder?.checkin_cash_received?.toString() || "",
     damage_charges: existingOrder?.damage_charges?.toString() || "0",
     discount_amount: existingOrder?.discount_amount?.toString() || "0",
     notes: existingOrder?.notes || "",
@@ -568,6 +570,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     return grand - advance;
   };
 
+  // Cash balance helpers (only relevant when payment_method is "cash")
+  const calcCashBalance = () => (parseFloat(form.cash_received) || 0) - (parseFloat(form.advance_amount) || 0);
+  const calcCheckinAmountDue = () => calcGrandTotal() - (checkinReturnAdvance ? 0 : (parseFloat(form.advance_amount) || 0));
+  const calcCheckinCashBalance = () => (parseFloat(form.checkin_cash_received) || 0) - calcCheckinAmountDue();
+
   // ---------- WORKFLOW ACTIONS ----------
   const validateOrder = () => {
     const newErrors = {};
@@ -643,6 +650,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             rental_duration: parseFloat(form.rental_duration) || 1,
             advance_amount: parseFloat(form.advance_amount) || 0,
             payment_method: form.payment_method || false,
+            cash_received: form.payment_method === 'cash' ? (parseFloat(form.cash_received) || 0) : 0,
             notes: form.notes || "",
             terms: form.terms || "",
           };
@@ -743,6 +751,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           if (advanceAmt > 0) {
             orderVals.advance_amount = advanceAmt;
             if (form.payment_method) orderVals.payment_method = form.payment_method;
+            if (form.payment_method === 'cash' && form.cash_received) {
+              orderVals.cash_received = parseFloat(form.cash_received) || 0;
+            }
           }
           if (sigB64) orderVals.customer_signature = sigB64;
           if (idFrontB64) orderVals.id_proof_front = idFrontB64;
@@ -917,6 +928,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         const checkinVals = {};
         if (!isPartial) checkinVals.advance_returned = checkinReturnAdvance;
         if (form.checkin_payment_method) checkinVals.checkin_payment_method = form.checkin_payment_method;
+        if (form.checkin_payment_method === 'cash' && form.checkin_cash_received) {
+          checkinVals.checkin_cash_received = parseFloat(form.checkin_cash_received) || 0;
+        }
         // Convert all images to base64 in parallel
         const [custSigB64, authSigB64, ...checkinLineB64s] = await Promise.all([
           uriToBase64(checkinSignatureUri),
@@ -1022,6 +1036,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     const advance = parseFloat(form.advance_amount) || 0;
     const grandTotal = subtotal + lateFees + damageCharges - discount;
     const amountDue = isCheckin ? grandTotal - (form.advance_returned ? 0 : advance) : grandTotal;
+    const cashReceived = parseFloat(form.cash_received) || 0;
+    const checkinCashReceived = parseFloat(form.checkin_cash_received) || 0;
+    const cashBalance = cashReceived - advance;
+    const checkinCashBalance = checkinCashReceived - amountDue;
     const totalAmt = grandTotal; // For compatibility with existing total row display
     const cur = "ر.ع.";
 
@@ -1189,24 +1207,32 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       <tbody>${checkinToolRows}</tbody>
     </table>`}
 
-    <table class="totals">
-      <tr><td><strong>Subtotal:</strong></td><td class="text-end">${cur}${subtotal.toFixed(3)}</td></tr>
-      ${lateFees > 0 ? `<tr style="color:red;font-weight:bold"><td>Late Fees:</td><td class="text-end">${cur}${lateFees.toFixed(3)}</td></tr>` : ""}
-      ${damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage:</td><td class="text-end">${cur}${damageCharges.toFixed(3)}</td></tr>` : ""}
-      ${discount > 0 ? `<tr style="color:green;font-weight:bold"><td>Discount:</td><td class="text-end">-${cur}${discount.toFixed(3)}</td></tr>` : ""}
-      <tr class="grand-row"><td><strong>TOTAL:</strong></td><td class="text-end"><strong>${cur}${grandTotal.toFixed(3)}</strong></td></tr>
-      ${isCheckin && advance > 0 && !form.advance_returned ? `<tr><td>Advance (-):</td><td class="text-end">-${cur}${advance.toFixed(3)}</td></tr>` : ""}
-      ${isCheckin ? `<tr class="grand-row" style="background-color:#f9f9f9"><td><strong>Amount Due:</strong></td><td class="text-end"><strong>${cur}${amountDue.toFixed(3)}</strong></td></tr>` : ""}
-    </table>
-
-    ${isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin-top:${isA5 ? "3px" : "10px"}">
-      <tr><td><strong>Advance:</strong></td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr>
-      ${form.payment_method ? `<tr><td><strong>Checkout Payment:</strong></td><td class="text-end">${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td></tr>` : ""}
-      ${form.checkin_payment_method ? `<tr><td><strong>Check-In Payment:</strong></td><td class="text-end">${form.checkin_payment_method.charAt(0).toUpperCase() + form.checkin_payment_method.slice(1)}</td></tr>` : ""}
-      <tr><td><strong>Returned:</strong></td><td class="text-end">${form.advance_returned ? "Yes" : "No"}</td></tr>
-    </table>` : ""}
-
-    ${!isCheckin && advance > 0 ? `<table class="totals"><tr><td>Advance Collected:</td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr>${form.payment_method ? `<tr><td>Payment Method:</td><td class="text-end">${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td></tr>` : ""}</table>` : ""}
+    <div style="display:flex;gap:${isA5 ? "4px" : "10px"};align-items:flex-start;">
+      ${isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin:0;">
+        <tr><td><strong>Advance:</strong></td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr>
+        ${form.payment_method ? `<tr><td><strong>Checkout Payment:</strong></td><td class="text-end">${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td></tr>` : ""}
+        ${form.payment_method === 'cash' && cashReceived > 0 ? `<tr><td><strong>Cash Received (Checkout):</strong></td><td class="text-end">${cur}${cashReceived.toFixed(3)}</td></tr><tr><td><strong>Balance Returned (Checkout):</strong></td><td class="text-end">${cur}${cashBalance.toFixed(3)}</td></tr>` : ""}
+        ${form.checkin_payment_method ? `<tr><td><strong>Check-In Payment:</strong></td><td class="text-end">${form.checkin_payment_method.charAt(0).toUpperCase() + form.checkin_payment_method.slice(1)}</td></tr>` : ""}
+        ${form.checkin_payment_method === 'cash' && checkinCashReceived > 0 ? `<tr><td><strong>Cash Received (Check-In):</strong></td><td class="text-end">${cur}${checkinCashReceived.toFixed(3)}</td></tr><tr><td><strong>Balance Returned (Check-In):</strong></td><td class="text-end">${cur}${checkinCashBalance.toFixed(3)}</td></tr>` : ""}
+        <tr><td><strong>Returned:</strong></td><td class="text-end">${form.advance_returned ? "Yes" : "No"}</td></tr>
+      </table>` : ""}
+      ${!isCheckin && advance > 0 ? `<table class="details" style="width:50%;margin:0;">
+        <tr><td>Advance Collected:</td><td class="text-end">${cur}${advance.toFixed(3)}</td></tr>
+        ${form.payment_method ? `<tr><td>Payment Method:</td><td class="text-end">${form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</td></tr>` : ""}
+        ${form.payment_method === 'cash' && cashReceived > 0 ? `<tr><td>Cash Received:</td><td class="text-end">${cur}${cashReceived.toFixed(3)}</td></tr><tr><td>Balance Returned:</td><td class="text-end">${cur}${cashBalance.toFixed(3)}</td></tr>` : ""}
+      </table>` : ""}
+      <table class="totals" style="width:50%;margin:0;">
+        <tr><td><strong>Subtotal:</strong></td><td class="text-end">${cur}${subtotal.toFixed(3)}</td></tr>
+        ${lateFees > 0 ? `<tr style="color:red;font-weight:bold"><td>Late Fees:</td><td class="text-end">${cur}${lateFees.toFixed(3)}</td></tr>` : ""}
+        ${damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage:</td><td class="text-end">${cur}${damageCharges.toFixed(3)}</td></tr>` : ""}
+        ${discount > 0 ? `<tr style="color:green;font-weight:bold"><td>Discount:</td><td class="text-end">-${cur}${discount.toFixed(3)}</td></tr>` : ""}
+        <tr class="grand-row"><td><strong>TOTAL:</strong></td><td class="text-end"><strong>${cur}${grandTotal.toFixed(3)}</strong></td></tr>
+        ${isCheckin && advance > 0 && !form.advance_returned ? `<tr><td>Advance (-):</td><td class="text-end">-${cur}${advance.toFixed(3)}</td></tr>` : ""}
+        ${isCheckin ? `<tr class="grand-row" style="background-color:#f9f9f9"><td><strong>Amount Due:</strong></td><td class="text-end"><strong>${cur}${amountDue.toFixed(3)}</strong></td></tr>` : ""}
+        ${isCheckin && form.checkin_payment_method === 'cash' && checkinCashReceived > 0 ? `<tr style="color:#28a745;font-weight:bold"><td>Cash Received:</td><td class="text-end">${cur}${checkinCashReceived.toFixed(3)}</td></tr><tr style="color:#28a745;font-weight:bold"><td>Balance to Return:</td><td class="text-end">${cur}${checkinCashBalance.toFixed(3)}</td></tr>` : ""}
+        ${!isCheckin && form.payment_method === 'cash' && cashReceived > 0 ? `<tr style="color:#28a745;font-weight:bold"><td>Cash Received:</td><td class="text-end">${cur}${cashReceived.toFixed(3)}</td></tr><tr style="color:#28a745;font-weight:bold"><td>Balance to Return:</td><td class="text-end">${cur}${cashBalance.toFixed(3)}</td></tr>` : ""}
+      </table>
+    </div>
 
     ${!isCheckin ? `<div style="margin-top:${isA5 ? "3px" : "8px"};border-top:1px solid #ccc;padding-top:${isA5 ? "2px" : "6px"};">
       <h5 style="margin:0 0 ${isA5 ? "1px" : "4px"} 0;font-size:${isA5 ? "6.5px" : "10px"};">Terms &amp; Conditions / الشروط والأحكام</h5>
@@ -1302,11 +1328,17 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       return null;
     };
 
+    const resolveWithFallback = async (primary, fallback) => {
+      const result = await resolveImageDataUri(primary);
+      if (result) return result;
+      return resolveImageDataUri(fallback);
+    };
+
     const assets = {};
-    assets.checkoutSignature = await resolveImageDataUri(checkoutSignatureUri || existingOrder?.customer_signature);
-    assets.checkinSignature = await resolveImageDataUri(checkinSignatureUri || existingOrder?.checkin_customer_signature);
-    assets.checkinAuthoritySignature = await resolveImageDataUri(checkinAuthoritySignatureUri || existingOrder?.checkin_signature);
-    assets.discountAuthSignature = await resolveImageDataUri(discountAuthSignatureUri || existingOrder?.discount_auth_signature);
+    assets.checkoutSignature = await resolveWithFallback(checkoutSignatureUri, existingOrder?.customer_signature);
+    assets.checkinSignature = await resolveWithFallback(checkinSignatureUri, existingOrder?.checkin_customer_signature);
+    assets.checkinAuthoritySignature = await resolveWithFallback(checkinAuthoritySignatureUri, existingOrder?.checkin_signature);
+    assets.discountAuthSignature = await resolveWithFallback(discountAuthSignatureUri, existingOrder?.discount_auth_signature);
     try {
       const logoAsset = Asset.fromModule(require("@assets/images/logo.png"));
       await logoAsset.downloadAsync();
@@ -1669,8 +1701,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             actual_duration: fresh.actual_duration || "",
             advance_amount: fresh.advance_amount?.toString() || "0",
             payment_method: fresh.payment_method || "",
+            cash_received: fresh.cash_received?.toString() || "",
             advance_returned: fresh.advance_returned || false,
             checkin_payment_method: fresh.checkin_payment_method || "",
+            checkin_cash_received: fresh.checkin_cash_received?.toString() || "",
             damage_charges: fresh.damage_charges?.toString() || "0",
             discount_amount: fresh.discount_amount?.toString() || "0",
             notes: fresh.notes || "",
@@ -1825,6 +1859,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           rental_duration: parseFloat(curForm.rental_duration) || 1,
           advance_amount: parseFloat(curForm.advance_amount) || 0,
           payment_method: curForm.payment_method || false,
+          cash_received: parseFloat(curForm.cash_received) || 0,
+          checkin_cash_received: parseFloat(curForm.checkin_cash_received) || 0,
           notes: curForm.notes || "",
           terms: curForm.terms || "",
         };
@@ -2287,6 +2323,26 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  {form.payment_method === "cash" && parseFloat(form.advance_amount || 0) > 0 && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={ciStyles.fieldLabel}>Cash Received (ر.ع.)</Text>
+                      <RNTextInput
+                        style={[styles.input, { borderWidth: 1, borderColor: "#e0e0e0", borderRadius: 8, padding: 10, fontSize: 14, backgroundColor: "#fff" }]}
+                        placeholder="0.000"
+                        value={form.cash_received}
+                        onChangeText={(t) => handleChange("cash_received", t)}
+                        keyboardType="decimal-pad"
+                      />
+                      {parseFloat(form.cash_received || 0) > 0 && (
+                        <View style={{ marginTop: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                          <Text style={ciStyles.fieldLabel}>Balance to Return</Text>
+                          <Text style={{ fontSize: 16, fontWeight: "700", color: calcCashBalance() >= 0 ? "#4CAF50" : "#F44336" }}>
+                            ر.ع.{calcCashBalance().toFixed(3)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -2651,17 +2707,58 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
               );
             })}
 
-            {/* Totals */}
+            {/* Payment Summary */}
             <View style={ciStyles.totalsCard}>
+              <Text style={[ciStyles.sectionTitle, { marginBottom: 8, marginTop: 0 }]}>PAYMENT SUMMARY</Text>
               <View style={ciStyles.totalRow}>
-                <Text style={ciStyles.totalLabel}>Total Late Fees</Text>
-                <Text style={ciStyles.totalValue}>
-                  ر.ع.{lines.filter((_, i) => !checkinExcludedIdx.includes(i)).reduce((sum, l) => sum + (parseFloat(l.late_fee_amount) || 0), 0).toFixed(3)}
-                </Text>
+                <Text style={ciStyles.totalLabel}>Rental Subtotal</Text>
+                <Text style={ciStyles.totalValue}>ر.ع.{calcSubtotal().toFixed(3)}</Text>
               </View>
+              {calcLateFees() > 0 && (
+                <View style={ciStyles.totalRow}>
+                  <Text style={[ciStyles.totalLabel, { color: "#F44336" }]}>Late Fees</Text>
+                  <Text style={[ciStyles.totalValue, { color: "#F44336" }]}>ر.ع.{calcLateFees().toFixed(3)}</Text>
+                </View>
+              )}
+              {calcDamageCharges() > 0 && (
+                <View style={ciStyles.totalRow}>
+                  <Text style={[ciStyles.totalLabel, { color: "#F44336" }]}>Damage Charges</Text>
+                  <Text style={[ciStyles.totalValue, { color: "#F44336" }]}>ر.ع.{calcDamageCharges().toFixed(3)}</Text>
+                </View>
+              )}
+              {(parseFloat(form.discount_amount) || 0) > 0 && (
+                <View style={ciStyles.totalRow}>
+                  <Text style={[ciStyles.totalLabel, { color: "#4CAF50" }]}>Discount</Text>
+                  <Text style={[ciStyles.totalValue, { color: "#4CAF50" }]}>-ر.ع.{(parseFloat(form.discount_amount) || 0).toFixed(3)}</Text>
+                </View>
+              )}
+              <View style={{ borderTopWidth: 1, borderTopColor: "#ccc", marginVertical: 6 }} />
               <View style={ciStyles.totalRow}>
-                <Text style={ciStyles.totalLabel}>Total Damage Charges</Text>
-                <Text style={ciStyles.totalValue}>ر.ع.{lines.filter((_, i) => !checkinExcludedIdx.includes(i)).reduce((sum, l) => sum + (parseFloat(l.damage_charge) || 0), 0).toFixed(3)}</Text>
+                <Text style={[ciStyles.totalLabel, { fontWeight: "700", fontSize: 14 }]}>TOTAL</Text>
+                <Text style={[ciStyles.totalValue, { fontWeight: "700", fontSize: 14 }]}>ر.ع.{calcGrandTotal().toFixed(3)}</Text>
+              </View>
+              {(parseFloat(form.advance_amount) || 0) > 0 && !checkinReturnAdvance && (
+                <View style={ciStyles.totalRow}>
+                  <Text style={[ciStyles.totalLabel, { color: "#007bff" }]}>Advance Collected (-)</Text>
+                  <Text style={[ciStyles.totalValue, { color: "#007bff" }]}>
+                    -ر.ع.{(parseFloat(form.advance_amount) || 0).toFixed(3)}
+                  </Text>
+                </View>
+              )}
+              {(parseFloat(form.advance_amount) || 0) > 0 && checkinReturnAdvance && (
+                <View style={ciStyles.totalRow}>
+                  <Text style={[ciStyles.totalLabel, { color: "#999" }]}>Advance (Returned)</Text>
+                  <Text style={[ciStyles.totalValue, { color: "#999" }]}>
+                    ر.ع.{(parseFloat(form.advance_amount) || 0).toFixed(3)}
+                  </Text>
+                </View>
+              )}
+              <View style={{ borderTopWidth: 2, borderTopColor: "#333", marginVertical: 6 }} />
+              <View style={ciStyles.totalRow}>
+                <Text style={[ciStyles.totalLabel, { fontWeight: "800", fontSize: 15, color: "#2c3e50" }]}>AMOUNT DUE</Text>
+                <Text style={[ciStyles.totalValue, { fontWeight: "800", fontSize: 15, color: "#2c3e50" }]}>
+                  ر.ع.{calcCheckinAmountDue().toFixed(3)}
+                </Text>
               </View>
             </View>
 
@@ -2682,6 +2779,28 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 ))}
               </View>
             </View>
+
+            {/* Cash Received (only for cash payment) */}
+            {form.checkin_payment_method === "cash" && (
+              <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: "#e0e0e0" }}>
+                <Text style={ciStyles.fieldLabel}>Cash Received (ر.ع.)</Text>
+                <RNTextInput
+                  style={[styles.input, { borderWidth: 1, borderColor: "#e0e0e0", borderRadius: 8, padding: 10, fontSize: 14, backgroundColor: "#f9f9f9" }]}
+                  placeholder="0.000"
+                  value={form.checkin_cash_received}
+                  onChangeText={(t) => handleChange("checkin_cash_received", t)}
+                  keyboardType="decimal-pad"
+                />
+                {parseFloat(form.checkin_cash_received || 0) > 0 && (
+                  <View style={{ marginTop: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={ciStyles.fieldLabel}>Balance to Return</Text>
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: calcCheckinCashBalance() >= 0 ? "#4CAF50" : "#F44336" }}>
+                      ر.ع.{calcCheckinCashBalance().toFixed(3)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Customer Signature */}
             <Text style={ciStyles.sectionTitle}>CUSTOMER SIGNATURE <Text style={{ color: "#F44336" }}>*</Text></Text>
@@ -3735,19 +3854,27 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={[styles.lineTotalValue, { color: "#4CAF50", fontWeight: "700" }]}>-ر.ع.{parseFloat(form.discount_amount).toFixed(3)}</Text>
                     </View>
                   )}
-                  {parseFloat(form.advance_amount) > 0 && (
-                    <View style={styles.lineTotalRow}>
-                      <Text style={styles.lineTotalLabel}>Advance Collected</Text>
-                      <Text style={[styles.lineTotalValue, { color: "#4CAF50" }]}>
-                        {form.advance_returned ? "" : "-"}ر.ع.{parseFloat(form.advance_amount).toFixed(3)}{form.advance_returned ? "(returned)" : ""}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={[styles.lineTotalRow, styles.grandTotalRow, { borderTopWidth: 1, borderTopColor: "#ccc", marginTop: 6, paddingTop: 6 }]}>
+                    <Text style={styles.grandTotalLabel}>Total</Text>
+                    <Text style={styles.grandTotalValue}>ر.ع.{calcGrandTotal().toFixed(3)}</Text>
+                  </View>
                   {form.payment_method ? (
                     <View style={styles.lineTotalRow}>
                       <Text style={styles.lineTotalLabel}>Checkout Payment</Text>
                       <Text style={styles.lineTotalValue}>{form.payment_method.charAt(0).toUpperCase() + form.payment_method.slice(1)}</Text>
                     </View>
+                  ) : null}
+                  {form.payment_method === "cash" && parseFloat(form.cash_received || 0) > 0 ? (
+                    <>
+                      <View style={styles.lineTotalRow}>
+                        <Text style={styles.lineTotalLabel}>Cash Received (Checkout)</Text>
+                        <Text style={styles.lineTotalValue}>ر.ع.{parseFloat(form.cash_received).toFixed(3)}</Text>
+                      </View>
+                      <View style={styles.lineTotalRow}>
+                        <Text style={styles.lineTotalLabel}>Balance Returned (Checkout)</Text>
+                        <Text style={[styles.lineTotalValue, { color: "#4CAF50" }]}>ر.ع.{calcCashBalance().toFixed(3)}</Text>
+                      </View>
+                    </>
                   ) : null}
                   {form.checkin_payment_method ? (
                     <View style={styles.lineTotalRow}>
@@ -3755,10 +3882,34 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={styles.lineTotalValue}>{form.checkin_payment_method.charAt(0).toUpperCase() + form.checkin_payment_method.slice(1)}</Text>
                     </View>
                   ) : null}
-                  <View style={[styles.lineTotalRow, styles.grandTotalRow, { borderTopWidth: 2, borderTopColor: "#333", marginTop: 8, paddingTop: 8 }]}>
-                    <Text style={styles.grandTotalLabel}>TOTAL</Text>
-                    <Text style={styles.grandTotalValue}>ر.ع.{calcTotal().toFixed(3)}</Text>
-                  </View>
+                  {form.checkin_payment_method === "cash" && parseFloat(form.checkin_cash_received || 0) > 0 ? (
+                    <>
+                      <View style={styles.lineTotalRow}>
+                        <Text style={styles.lineTotalLabel}>Cash Received (Check-In)</Text>
+                        <Text style={styles.lineTotalValue}>ر.ع.{parseFloat(form.checkin_cash_received).toFixed(3)}</Text>
+                      </View>
+                      <View style={styles.lineTotalRow}>
+                        <Text style={styles.lineTotalLabel}>Balance Returned (Check-In)</Text>
+                        <Text style={[styles.lineTotalValue, { color: "#4CAF50" }]}>ر.ع.{calcCheckinCashBalance().toFixed(3)}</Text>
+                      </View>
+                    </>
+                  ) : null}
+                  {parseFloat(form.advance_amount) > 0 && (
+                    <View style={styles.lineTotalRow}>
+                      <Text style={styles.lineTotalLabel}>
+                        Advance Collected{form.advance_returned ? " (Returned)" : " (-)"}
+                      </Text>
+                      <Text style={[styles.lineTotalValue, { color: form.advance_returned ? "#999" : "#4CAF50" }]}>
+                        {form.advance_returned ? "" : "-"}ر.ع.{parseFloat(form.advance_amount).toFixed(3)}
+                      </Text>
+                    </View>
+                  )}
+                  {parseFloat(form.advance_amount) > 0 && !form.advance_returned && (
+                    <View style={[styles.lineTotalRow, { borderTopWidth: 2, borderTopColor: "#333", marginTop: 6, paddingTop: 6 }]}>
+                      <Text style={[styles.grandTotalLabel, { color: "#2c3e50" }]}>Amount Due</Text>
+                      <Text style={[styles.grandTotalValue, { color: "#2c3e50" }]}>ر.ع.{calcTotal().toFixed(3)}</Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
