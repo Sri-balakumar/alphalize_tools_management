@@ -28,6 +28,7 @@ const MENU_ITEMS = [
   { id: "8", title: "Order Reports", screen: "OrderReportsScreen", icon: "description", bg: "#FBE9E7", accent: "#FF5722" },
   { id: "9", title: "Discount Details", screen: "DiscountDetailsScreen", icon: "local-offer", bg: "#FCE4EC", accent: "#E91E63" },
   { id: "10", title: "Rental Dashboard", screen: "RentalDashboardScreen", icon: "trending-up", bg: "#E1F5FE", accent: "#03A9F4" },
+  { id: "11", title: "Customer ID Proofs", screen: "CustomersScreen", icon: "badge", bg: "#EFEBE9", accent: "#795548", params: { filterIdProofs: true } },
 ];
 
 const formatData = (data, numColumns) => {
@@ -90,7 +91,7 @@ const HomeScreen = ({ navigation }) => {
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.7}
-        onPress={() => navigation.navigate(item.screen)}
+        onPress={() => navigation.navigate(item.screen, item.params || {})}
       >
         <View style={[styles.iconWrapper, { backgroundColor: item.bg }]}>
           <MaterialIcons name={item.icon} size={30} color={item.accent} />

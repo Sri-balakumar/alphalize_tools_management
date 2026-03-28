@@ -30,6 +30,12 @@
               action="action_rental_timesheet"
               sequence="20"/>
 
+    <menuitem id="menu_customer_id_proofs"
+              name="Customer ID Proofs"
+              parent="menu_rental_operations"
+              action="action_customer_id_proofs"
+              sequence="25"/>
+
     <!-- ═══ TOOLS ═══ -->
     <menuitem id="menu_rental_tools"
               name="Tools &amp; Equipment"

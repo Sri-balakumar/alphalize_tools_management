@@ -659,6 +659,11 @@ export const updateCustomer = async (auth, customerId, values) => {
   await odooWrite(auth, "res.partner", [customerId], odooValues);
 };
 
+export const fetchCustomerImages = async (auth, partnerId) => {
+  const records = await odooRead(auth, "res.partner", [Number(partnerId)], ["id_proof_front", "id_proof_back"]);
+  return records[0] || {};
+};
+
 export const deleteCustomer = async (auth, customerId) => {
   return odooCallMethod(auth, "res.partner", "action_force_delete", [customerId]);
 };
@@ -798,6 +803,7 @@ export default {
   fetchCustomers,
   createCustomer,
   updateCustomer,
+  fetchCustomerImages,
   deleteCustomer,
   fetchPricingRules,
   updatePricingRule,

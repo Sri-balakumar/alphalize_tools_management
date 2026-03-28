@@ -28,7 +28,7 @@ import * as Print from "expo-print";
 import { Asset } from "expo-asset";
 import SignaturePad from "@components/common/SignaturePad/SignaturePad";
 import CameraCapture from "@components/common/CameraCapture/CameraCapture";
-import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails } from "@api/services/odooService";
+import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer, fetchCustomerImages, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails } from "@api/services/odooService";
 import { isEmail, isPhone, getPhoneLength, getEmailSuggestion } from "@utils/validation/validation";
 
 const PERIOD_TYPES = [
@@ -727,9 +727,25 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     })();
   };
 
-  const openCheckoutWizard = () => {
+  const openCheckoutWizard = async () => {
     setTcAccepted(false);
     setShowCheckoutModal(true);
+
+    // Auto-fetch ID proof from customer profile if not already loaded
+    if (form.partner_id && !idProofFrontUri && odooAuth) {
+      try {
+        const partnerImgs = await fetchCustomerImages(odooAuth, form.partner_id);
+        if (partnerImgs.id_proof_front) {
+          setIdProofFrontUri(base64ToDataUri(partnerImgs.id_proof_front));
+          setCheckoutIdProof(true);
+        }
+        if (partnerImgs.id_proof_back) {
+          setIdProofBackUri(base64ToDataUri(partnerImgs.id_proof_back));
+        }
+      } catch (e) {
+        // Ignore — customer may not have ID proof saved yet
+      }
+    }
   };
 
   const confirmCheckout = async () => {
@@ -795,6 +811,14 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           if (idBackB64) orderVals.id_proof_back = idBackB64;
           if (Object.keys(orderVals).length > 0) {
             await updateOrderValues(odooAuth, odooOrderId, orderVals);
+          }
+
+          // Save ID proof to customer profile for future checkouts
+          if (form.partner_id && (idFrontB64 || idBackB64)) {
+            const partnerVals = {};
+            if (idFrontB64) partnerVals.id_proof_front = idFrontB64;
+            if (idBackB64) partnerVals.id_proof_back = idBackB64;
+            updateCustomer(odooAuth, form.partner_id, partnerVals).catch(() => {});
           }
 
           // 4. Save line-level photos & conditions in parallel

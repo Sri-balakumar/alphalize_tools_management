@@ -96,9 +96,13 @@ const splitPhoneCountryCode = (fullPhone) => {
   return { code: "+968", local: phone.replace("+", "") };
 };
 
-const CustomersScreen = ({ navigation }) => {
+const CustomersScreen = ({ navigation, route }) => {
+  const filterIdProofs = route?.params?.filterIdProofs || false;
   const odooAuth = useAuthStore((s) => s.odooAuth);
-  const customers = useToolStore((s) => s.customers);
+  const allCustomers = useToolStore((s) => s.customers);
+  const customers = filterIdProofs
+    ? allCustomers.filter((c) => c.id_proof_front)
+    : allCustomers;
   const fetchCustomers = useToolStore((s) => s.fetchCustomers);
   const deleteCustomerFromStore = useToolStore((s) => s.deleteCustomer);
   const [search, setSearch] = useState("");
@@ -328,7 +332,7 @@ const CustomersScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView>
-      <NavigationHeader title="Customers" navigation={navigation} />
+      <NavigationHeader title={filterIdProofs ? "Customer ID Proofs" : "Customers"} navigation={navigation} />
       <RoundedContainer>
         <FlatList
           data={filteredCustomers}

@@ -81,6 +81,14 @@ class RentalCheckoutWizard(models.TransientModel):
                 }))
             self.line_ids = lines
 
+            # Auto-fetch ID proof from customer profile
+            partner = self.order_id.partner_id
+            if partner:
+                if partner.id_proof_front:
+                    self.id_proof_front = partner.id_proof_front
+                if partner.id_proof_back:
+                    self.id_proof_back = partner.id_proof_back
+
     def action_confirm_checkout(self):
         self.ensure_one()
 
@@ -107,6 +115,17 @@ class RentalCheckoutWizard(models.TransientModel):
                 order_vals['cash_received'] = self.cash_received
 
         self.order_id.write(order_vals)
+
+        # Save ID proof to customer profile for future checkouts
+        partner = self.order_id.partner_id
+        if partner:
+            partner_vals = {}
+            if self.id_proof_front:
+                partner_vals['id_proof_front'] = self.id_proof_front
+            if self.id_proof_back:
+                partner_vals['id_proof_back'] = self.id_proof_back
+            if partner_vals:
+                partner.write(partner_vals)
 
         # Validate condition is set for all lines
         for wiz_line in self.line_ids:
