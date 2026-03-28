@@ -451,6 +451,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       );
       if (rule) lateFee = parseFloat(rule.late_fee_per_day) || 0;
     }
+    const taxRate = parseFloat(tool.tax_rate) || 0;
     setLines((prev) => {
       const updated = [...prev];
       updated[index] = {
@@ -460,12 +461,25 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         serial_number: tool.serial_number || "",
         unit_price: tool.rental_price_per_day || "0",
         late_fee_per_day: String(lateFee),
+        tax_rate: taxRate,
       };
       const price = parseFloat(updated[index].unit_price) || 0;
       const dur = parseFloat(updated[index].planned_duration) || 1;
       const qty = parseFloat(updated[index].quantity) || 1;
       const multiplier = LINE_DAY_MULTIPLIERS[updated[index].period_type || form.rental_period_type || "day"] || 1;
-      updated[index].line_total = (price * dur * multiplier * qty).toFixed(3);
+      const rentalCost = price * dur * multiplier * qty;
+      updated[index].line_total = rentalCost.toFixed(3);
+      // Compute tax locally (tax inclusive: extract from rental cost)
+      if (taxRate > 0) {
+        const taxAmt = rentalCost - (rentalCost / (1 + taxRate / 100));
+        updated[index].tax_amount = taxAmt.toFixed(3);
+        updated[index].price_before_tax = (rentalCost - taxAmt).toFixed(3);
+        updated[index].tax_ids = [{ name: taxRate + '%' }];
+      } else {
+        updated[index].tax_amount = "0";
+        updated[index].price_before_tax = rentalCost.toFixed(3);
+        updated[index].tax_ids = [];
+      }
       return updated;
     });
     setActiveToolLineIdx(-1);
@@ -493,6 +507,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         damage_charge: "0",
         late_fee_per_day: "0",
         late_fee_amount: "0",
+        tax_rate: 0,
+        tax_amount: "0",
+        price_before_tax: "0",
+        tax_ids: [],
         discount_type: "",
         discount_value: "0",
         notes: "",
@@ -501,17 +519,30 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   };
 
   const updateLine = (index, field, value) => {
+    const recomputeTax = (line) => {
+      const price = parseFloat(line.unit_price) || 0;
+      const dur = parseFloat(line.planned_duration) || 1;
+      const qty = parseFloat(line.quantity) || 1;
+      const multiplier = LINE_DAY_MULTIPLIERS[line.period_type || "day"] || 1;
+      const rentalCost = price * dur * multiplier * qty;
+      line.line_total = rentalCost.toFixed(3);
+      const taxRate = parseFloat(line.tax_rate) || 0;
+      if (taxRate > 0) {
+        const taxAmt = rentalCost - (rentalCost / (1 + taxRate / 100));
+        line.tax_amount = taxAmt.toFixed(3);
+        line.price_before_tax = (rentalCost - taxAmt).toFixed(3);
+      } else {
+        line.tax_amount = "0";
+        line.price_before_tax = rentalCost.toFixed(3);
+      }
+      return line;
+    };
+
     // When per-line period_type changes, only update the specific line
     if (field === "period_type") {
       setLines((prev) => prev.map((l, i) => {
         if (i !== index) return l;
-        const updated = { ...l, period_type: value };
-        const price = parseFloat(updated.unit_price) || 0;
-        const dur = parseFloat(updated.planned_duration) || 1;
-        const qty = parseFloat(updated.quantity) || 1;
-        const multiplier = LINE_DAY_MULTIPLIERS[value] || 1;
-        updated.line_total = (price * dur * multiplier * qty).toFixed(3);
-        return updated;
+        return recomputeTax({ ...l, period_type: value });
       }));
       return;
     }
@@ -519,13 +550,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
       if (["unit_price", "planned_duration", "quantity"].includes(field)) {
-        const l = updated[index];
-        const price = parseFloat(l.unit_price) || 0;
-        const dur = parseFloat(l.planned_duration) || 1;
-        const qty = parseFloat(l.quantity) || 1;
-        const multiplier = LINE_DAY_MULTIPLIERS[l.period_type || "day"] || 1;
-        const totalDays = dur * multiplier;
-        updated[index].line_total = (price * totalDays * qty).toFixed(3);
+        updated[index] = recomputeTax(updated[index]);
       }
       return updated;
     });
@@ -551,16 +576,18 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     return price * dur * multiplier * qty;
   };
 
-  const calcSubtotal = () => lines.reduce((sum, l) => sum + calcLineTotal(l), 0);
+  const calcSubtotal = () => lines.reduce((sum, l) => sum + (parseFloat(l.price_before_tax) || calcLineTotal(l)), 0);
+  const calcTaxTotal = () => lines.reduce((sum, l) => sum + (parseFloat(l.tax_amount) || 0), 0);
+  const calcSubtotalWithTax = () => lines.reduce((sum, l) => sum + calcLineTotal(l), 0);
   const calcLateFees = () => lines.reduce((sum, l) => {
     const amt = parseFloat(l.late_fee_amount) || 0;
     return sum + amt;
   }, 0);
   const calcDamageCharges = () => lines.reduce((sum, l) => sum + (parseFloat(l.damage_charge) || 0), 0);
 
-  // Grand Total = Subtotal + LateFees + Damage - Discount
+  // Grand Total = Subtotal (before tax) + Tax + LateFees + Damage - Discount
   const calcGrandTotal = () => {
-    return calcSubtotal() + calcLateFees() + calcDamageCharges() - (parseFloat(form.discount_amount) || 0);
+    return calcSubtotal() + calcTaxTotal() + calcLateFees() + calcDamageCharges() - (parseFloat(form.discount_amount) || 0);
   };
 
   // Amount Due = GrandTotal - Advance (if not returned)
@@ -1030,11 +1057,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const buildInvoiceHtml = (type, assets = {}) => {
     const isCheckin = type === "checkin";
     const subtotal = calcSubtotal();
+    const taxTotal = calcTaxTotal();
     const lateFees = isCheckin ? calcLateFees() : 0;
     const damageCharges = isCheckin ? calcDamageCharges() : 0;
     const discount = isCheckin ? (parseFloat(form.discount_amount) || 0) : 0;
     const advance = parseFloat(form.advance_amount) || 0;
-    const grandTotal = subtotal + lateFees + damageCharges - discount;
+    const grandTotal = subtotal + taxTotal + lateFees + damageCharges - discount;
     const amountDue = isCheckin ? grandTotal - (form.advance_returned ? 0 : advance) : grandTotal;
     const cashReceived = parseFloat(form.cash_received) || 0;
     const checkinCashReceived = parseFloat(form.checkin_cash_received) || 0;
@@ -1223,6 +1251,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </table>` : ""}
       <table class="totals" style="width:50%;margin:0;">
         <tr><td><strong>Subtotal:</strong></td><td class="text-end">${cur}${subtotal.toFixed(3)}</td></tr>
+        ${taxTotal > 0 ? `<tr><td>Tax:</td><td class="text-end">${cur}${taxTotal.toFixed(3)}</td></tr>` : ""}
         ${lateFees > 0 ? `<tr style="color:red;font-weight:bold"><td>Late Fees:</td><td class="text-end">${cur}${lateFees.toFixed(3)}</td></tr>` : ""}
         ${damageCharges > 0 ? `<tr style="color:red;font-weight:bold"><td>Damage:</td><td class="text-end">${cur}${damageCharges.toFixed(3)}</td></tr>` : ""}
         ${discount > 0 ? `<tr style="color:green;font-weight:bold"><td>Discount:</td><td class="text-end">-${cur}${discount.toFixed(3)}</td></tr>` : ""}
@@ -2267,6 +2296,22 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={[ciStyles.readOnlyText, { color: "#1565C0", fontWeight: "700" }]}>ر.ع.{calcLineTotal(line).toFixed(3)}</Text>
                     </View>
                   </View>
+                  {parseFloat(line.tax_amount || 0) > 0 && (
+                    <>
+                      <View style={coStyles.pricingItem}>
+                        <Text style={ciStyles.lateFeeLabel}>Tax %</Text>
+                        <View style={ciStyles.readOnlyBox}>
+                          <Text style={ciStyles.readOnlyText}>{line.tax_ids && line.tax_ids.length > 0 ? line.tax_ids.map(t => typeof t === 'object' ? t.name : t).join(', ') : '5%'}</Text>
+                        </View>
+                      </View>
+                      <View style={coStyles.pricingItem}>
+                        <Text style={ciStyles.lateFeeLabel}>Tax Amt</Text>
+                        <View style={[ciStyles.readOnlyBox, { backgroundColor: "#FFF3E0", borderColor: "#FFB74D" }]}>
+                          <Text style={[ciStyles.readOnlyText, { color: "#E65100", fontWeight: "700" }]}>ر.ع.{parseFloat(line.tax_amount).toFixed(3)}</Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {/* Condition */}
@@ -2623,6 +2668,22 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={[ciStyles.readOnlyText, { color: "#2E7D32", fontWeight: "700" }]}>ر.ع.{calcLineTotal(line).toFixed(3)}</Text>
                     </View>
                   </View>
+                  {parseFloat(line.tax_amount || 0) > 0 && (
+                    <>
+                      <View style={coStyles.pricingItem}>
+                        <Text style={ciStyles.lateFeeLabel}>Tax %</Text>
+                        <View style={ciStyles.readOnlyBox}>
+                          <Text style={ciStyles.readOnlyText}>{line.tax_ids && line.tax_ids.length > 0 ? line.tax_ids.map(t => typeof t === 'object' ? t.name : t).join(', ') : '5%'}</Text>
+                        </View>
+                      </View>
+                      <View style={coStyles.pricingItem}>
+                        <Text style={ciStyles.lateFeeLabel}>Tax Amt</Text>
+                        <View style={[ciStyles.readOnlyBox, { backgroundColor: "#FFF3E0", borderColor: "#FFB74D" }]}>
+                          <Text style={[ciStyles.readOnlyText, { color: "#E65100", fontWeight: "700" }]}>ر.ع.{parseFloat(line.tax_amount).toFixed(3)}</Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {/* Return Condition */}
@@ -2714,6 +2775,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                 <Text style={ciStyles.totalLabel}>Rental Subtotal</Text>
                 <Text style={ciStyles.totalValue}>ر.ع.{calcSubtotal().toFixed(3)}</Text>
               </View>
+              {calcTaxTotal() > 0 && (
+                <View style={ciStyles.totalRow}>
+                  <Text style={ciStyles.totalLabel}>Tax</Text>
+                  <Text style={ciStyles.totalValue}>ر.ع.{calcTaxTotal().toFixed(3)}</Text>
+                </View>
+              )}
               {calcLateFees() > 0 && (
                 <View style={ciStyles.totalRow}>
                   <Text style={[ciStyles.totalLabel, { color: "#F44336" }]}>Late Fees</Text>
@@ -3784,6 +3851,24 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                       <Text style={styles.lineTotalText}>ر.ع.{calcLineTotal(line).toFixed(3)}</Text>
                     </View>
                   </View>
+                  {parseFloat(line.tax_amount || 0) > 0 && (
+                    <View style={[styles.lineMetricsRow, { marginTop: 4 }]}>
+                      <View style={styles.lineMetric}>
+                        <Text style={styles.lineMetricLabel}>Tax %</Text>
+                        <Text style={[styles.lineMetricValue, { color: "#E65100" }]}>
+                          {line.tax_ids && line.tax_ids.length > 0 ? line.tax_ids.map(t => typeof t === 'object' ? t.name : t).join(', ') : '-'}
+                        </Text>
+                      </View>
+                      <View style={styles.lineMetric}>
+                        <Text style={styles.lineMetricLabel}>Tax Amount</Text>
+                        <Text style={[styles.lineMetricValue, { color: "#E65100", fontWeight: "700" }]}>ر.ع.{parseFloat(line.tax_amount).toFixed(3)}</Text>
+                      </View>
+                      <View style={[styles.lineMetric, { alignItems: "flex-end" }]}>
+                        <Text style={styles.lineMetricLabel}>Before Tax</Text>
+                        <Text style={styles.lineMetricValue}>ر.ع.{(parseFloat(line.price_before_tax) || calcLineTotal(line)).toFixed(3)}</Text>
+                      </View>
+                    </View>
+                  )}
                   {state !== "draft" && state !== "confirmed" && (parseFloat(line.late_fee_amount || 0) > 0 || parseFloat(line.damage_charge || 0) > 0) && (
                     <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#f0f0f0" }}>
                       {parseFloat(line.late_fee_amount || 0) > 0 && (
@@ -3836,6 +3921,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                     <Text style={styles.lineTotalLabel}>Subtotal</Text>
                     <Text style={styles.lineTotalValue}>ر.ع.{calcSubtotal().toFixed(3)}</Text>
                   </View>
+                  {calcTaxTotal() > 0 && (
+                    <View style={styles.lineTotalRow}>
+                      <Text style={styles.lineTotalLabel}>Tax</Text>
+                      <Text style={styles.lineTotalValue}>ر.ع.{calcTaxTotal().toFixed(3)}</Text>
+                    </View>
+                  )}
                   {calcLateFees() > 0 && (
                     <View style={styles.lineTotalRow}>
                       <Text style={[styles.lineTotalLabel, { color: "#F44336" }]}>Late Fees</Text>

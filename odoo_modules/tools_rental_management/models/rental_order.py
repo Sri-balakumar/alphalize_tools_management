@@ -111,6 +111,8 @@ class RentalOrder(models.Model):
         compute='_compute_checkin_cash_balance', store=True)
     late_fee = fields.Monetary(
         string='Late Fees', compute='_compute_totals', store=True)
+    tax_total = fields.Monetary(
+        string='Tax', compute='_compute_totals', store=True)
     damage_charges = fields.Monetary(string='Damage Charges')
     discount_amount = fields.Monetary(string='Discount')
     total_amount = fields.Monetary(
@@ -209,15 +211,19 @@ class RentalOrder(models.Model):
 
     # ── Computed Methods ────────────────────────────────────────────────
     @api.depends('line_ids.rental_cost', 'line_ids.late_fee_amount',
+                 'line_ids.tax_amount', 'line_ids.price_before_tax',
                  'damage_charges', 'discount_amount')
     def _compute_totals(self):
         for order in self:
-            subtotal = sum(order.line_ids.mapped('rental_cost'))
             late = sum(order.line_ids.mapped('late_fee_amount'))
-            order.subtotal = subtotal
+            tax = sum(order.line_ids.mapped('tax_amount'))
+            subtotal_before_tax = sum(order.line_ids.mapped('price_before_tax'))
+            order.subtotal = subtotal_before_tax
             order.late_fee = late
+            order.tax_total = tax
+            # Total = subtotal (before tax) + tax + late fees + damage - discount
             order.total_amount = (
-                subtotal + late
+                subtotal_before_tax + tax + late
                 + (order.damage_charges or 0.0)
                 - (order.discount_amount or 0.0)
             )
@@ -586,6 +592,11 @@ class RentalOrder(models.Model):
                 discount_display = f"{ol.discount_value}%"
             elif ol.discount_type == 'fixed' and ol.discount_value:
                 discount_display = f"{self.currency_id.symbol or '$'} {ol.discount_value}"
+            # Build tax display string
+            tax_display = ''
+            if ol.tax_ids:
+                tax_display = ', '.join(
+                    f"{t.amount}%" for t in ol.tax_ids)
             line_vals.append({
                 'wizard_id': wizard.id,
                 'order_line_id': ol.id,
@@ -605,6 +616,8 @@ class RentalOrder(models.Model):
                 'late_fee_per_day': late_fee,
                 'discount_display': discount_display,
                 'discount_line_amount': ol.discount_line_amount or 0.0,
+                'tax_display': tax_display,
+                'tax_amount': ol.tax_amount or 0.0,
             })
         if line_vals:
             self.env['rental.checkin.wizard.line'].create(line_vals)

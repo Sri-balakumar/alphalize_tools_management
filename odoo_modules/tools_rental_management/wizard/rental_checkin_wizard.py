@@ -56,13 +56,16 @@ class RentalCheckinWizard(models.TransientModel):
         string='Rental Subtotal',
         related='order_id.subtotal',
         currency_field='currency_id')
+    tax_total = fields.Monetary(
+        string='Tax',
+        related='order_id.tax_total',
+        currency_field='currency_id')
     total_bill = fields.Monetary(
         string='Total Bill',
         compute='_compute_total_bill',
         currency_field='currency_id')
     balance_due = fields.Monetary(
         string='Balance Due from Customer',
-        compute='_compute_balance_due',
         currency_field='currency_id')
     is_late = fields.Boolean(
         string='Late Return', compute='_compute_total_days')
@@ -82,7 +85,6 @@ class RentalCheckinWizard(models.TransientModel):
         string='Cash Received', currency_field='currency_id')
     checkin_cash_balance = fields.Monetary(
         string='Balance to Return',
-        compute='_compute_checkin_cash_balance',
         currency_field='currency_id')
     # Customer signature at check-in
     checkin_customer_signature = fields.Binary(
@@ -139,41 +141,59 @@ class RentalCheckinWizard(models.TransientModel):
         for wiz in self:
             wiz.advance_amount = wiz.order_id.advance_amount or 0.0
 
-    @api.depends('order_id.subtotal', 'total_late_fee', 'total_damage_charge',
+    @api.depends('order_id.subtotal', 'order_id.tax_total',
+                 'total_late_fee', 'total_damage_charge',
                  'total_discount')
     def _compute_total_bill(self):
         for wiz in self:
             wiz.total_bill = (
                 (wiz.order_id.subtotal or 0.0)
+                + (wiz.order_id.tax_total or 0.0)
                 + (wiz.total_late_fee or 0.0)
                 + (wiz.total_damage_charge or 0.0)
                 - (wiz.total_discount or 0.0)
             )
 
-    @api.depends('total_bill', 'advance_amount', 'return_advance')
-    def _compute_balance_due(self):
-        for wiz in self:
-            if wiz.advance_amount and not wiz.return_advance:
-                wiz.balance_due = max(wiz.total_bill - wiz.advance_amount, 0.0)
-            else:
-                wiz.balance_due = wiz.total_bill
+    @api.model
+    def create(self, vals):
+        rec = super().create(vals)
+        # Set initial balance_due after creation when order_id is available
+        for wiz in rec:
+            if wiz.order_id:
+                bill = wiz._get_total_bill()
+                advance = wiz.advance_amount or 0.0
+                if advance and not wiz.return_advance:
+                    wiz.balance_due = max(bill - advance, 0.0)
+                else:
+                    wiz.balance_due = bill
+        return rec
 
-    @api.depends('checkin_cash_received', 'balance_due', 'total_bill', 'return_advance')
-    def _compute_checkin_cash_balance(self):
-        for wiz in self:
-            if wiz.checkin_cash_received:
-                due = wiz.balance_due if (wiz.advance_amount and not wiz.return_advance) else wiz.total_bill
-                wiz.checkin_cash_balance = wiz.checkin_cash_received - due
-            else:
-                wiz.checkin_cash_balance = 0.0
+    def _get_total_bill(self):
+        """Helper to calculate current total bill."""
+        self.ensure_one()
+        return (
+            (self.order_id.subtotal or 0.0)
+            + (self.order_id.tax_total or 0.0)
+            + (self.total_late_fee or 0.0)
+            + (self.total_damage_charge or 0.0)
+            - (self.total_discount or 0.0)
+        )
 
-    @api.onchange('return_advance')
-    def _onchange_return_advance(self):
-        """Force recompute balance_due when toggling the checkbox."""
+    @api.onchange('return_advance', 'total_bill', 'advance_amount',
+                  'total_late_fee', 'total_damage_charge', 'total_discount')
+    def _onchange_balance_due(self):
+        bill = self._get_total_bill()
         if self.advance_amount and not self.return_advance:
-            self.balance_due = max(self.total_bill - self.advance_amount, 0.0)
+            self.balance_due = max(bill - self.advance_amount, 0.0)
         else:
-            self.balance_due = 0.0
+            self.balance_due = bill
+
+    @api.onchange('checkin_cash_received', 'balance_due')
+    def _onchange_checkin_cash_balance(self):
+        if self.checkin_cash_received:
+            self.checkin_cash_balance = self.checkin_cash_received - self.balance_due
+        else:
+            self.checkin_cash_balance = 0.0
 
     @api.depends('line_ids')
     def _compute_is_partial(self):
@@ -438,6 +458,13 @@ class RentalCheckinWizardLine(models.TransientModel):
     damage_charge = fields.Monetary(
         string='Damage Charge', currency_field='currency_id')
     tool_image = fields.Binary(string='Tool Photo')
+
+    # Tax fields (readonly, from order line)
+    tax_display = fields.Char(
+        string='Tax %', readonly=True)
+    tax_amount = fields.Monetary(
+        string='Tax Amt', currency_field='currency_id',
+        readonly=True)
 
     # Discount fields (readonly, pre-filled from order line)
     discount_display = fields.Char(

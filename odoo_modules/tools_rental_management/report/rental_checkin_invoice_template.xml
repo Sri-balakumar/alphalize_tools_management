@@ -135,6 +135,8 @@
                                     <th>Damage</th>
                                     <th class="text-end">Dmg ر.ع.</th>
                                     <th class="text-end">Disc.</th>
+                                    <th class="text-end">Tax %</th>
+                                    <th class="text-end">Tax Amt</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -215,6 +217,17 @@
                                                   t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
                                         </t>
                                     </td>
+                                    <td class="text-end">
+                                        <t t-if="line.tax_ids">
+                                            <t t-foreach="line.tax_ids" t-as="tax">
+                                                <span t-esc="str(tax.amount) + '%'"/>
+                                            </t>
+                                        </t>
+                                    </td>
+                                    <td class="text-end">
+                                        <span t-field="line.tax_amount"
+                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -267,6 +280,10 @@
                                     <tr>
                                         <td><strong>Subtotal:</strong></td>
                                         <td class="text-end"><span t-field="doc.subtotal"/></td>
+                                    </tr>
+                                    <tr t-if="doc.tax_total">
+                                        <td>Tax:</td>
+                                        <td class="text-end"><span t-field="doc.tax_total"/></td>
                                     </tr>
                                     <t t-if="doc.late_fee">
                                         <tr style="color:red; font-weight:bold;">
@@ -551,6 +568,8 @@
                                     <th>Damage</th>
                                     <th class="text-end">Dmg ر.ع.</th>
                                     <th class="text-end">Disc.</th>
+                                    <th class="text-end">Tax %</th>
+                                    <th class="text-end">Tax Amt</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -631,6 +650,17 @@
                                                   t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
                                         </t>
                                     </td>
+                                    <td class="text-end">
+                                        <t t-if="line.tax_ids">
+                                            <t t-foreach="line.tax_ids" t-as="tax">
+                                                <span t-esc="str(tax.amount) + '%'"/>
+                                            </t>
+                                        </t>
+                                    </td>
+                                    <td class="text-end">
+                                        <span t-field="line.tax_amount"
+                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -643,6 +673,10 @@
                                     <tr>
                                         <td><strong>Subtotal:</strong></td>
                                         <td class="text-end"><span t-field="doc.subtotal"/></td>
+                                    </tr>
+                                    <tr t-if="doc.tax_total">
+                                        <td>Tax:</td>
+                                        <td class="text-end"><span t-field="doc.tax_total"/></td>
                                     </tr>
                                     <t t-if="doc.late_fee">
                                         <tr style="color:red; font-weight:bold;">

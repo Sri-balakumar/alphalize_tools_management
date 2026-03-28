@@ -73,6 +73,21 @@ class RentalTool(models.Model):
         string='Late Fee / Day', compute='_compute_pricing_fields',
         inverse='_set_late_fee', currency_field='currency_id')
 
+    # Tax rate from linked product (for app)
+    tax_rate = fields.Float(
+        string='Tax Rate (%)',
+        compute='_compute_tax_rate')
+
+    @api.depends('product_id', 'product_id.taxes_id')
+    def _compute_tax_rate(self):
+        for tool in self:
+            if tool.product_id and tool.product_id.taxes_id:
+                sale_taxes = tool.product_id.taxes_id.filtered(
+                    lambda t: t.type_tax_use == 'sale')
+                tool.tax_rate = sum(sale_taxes.mapped('amount'))
+            else:
+                tool.tax_rate = 0.0
+
     # Product-related display fields
     product_list_price = fields.Float(
         string='Product Sale Price',

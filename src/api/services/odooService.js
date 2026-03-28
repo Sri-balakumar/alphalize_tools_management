@@ -39,7 +39,7 @@ export const fetchCategories = async (auth) => {
 const TOOL_FIELDS = [
   "name", "code", "serial_number", "barcode", "brand", "model_name",
   "location", "state", "category_id", "total_qty", "available_qty",
-  "rental_price_per_day", "late_fee_per_day",
+  "rental_price_per_day", "late_fee_per_day", "tax_rate",
   "purchase_price", "purchase_date", "description",
   "total_rental_count", "total_revenue", "active", "image",
 ];
@@ -137,6 +137,7 @@ const mapTool = (r) => ({
   available_qty: r.available_qty || 0,
   rental_price_per_day: String(r.rental_price_per_day || "0"),
   late_fee_per_day: String(r.late_fee_per_day || "0"),
+  tax_rate: r.tax_rate || 0,
   purchase_price: String(r.purchase_price || "0"),
   purchase_date: r.purchase_date || "",
   description: r.description || "",
@@ -154,7 +155,8 @@ const ORDER_FIELDS = [
   "date_order", "date_planned_checkout", "date_planned_checkin",
   "date_checkout", "date_checkin", "rental_period_type", "rental_duration",
   "actual_duration", "actual_duration_display", "advance_amount", "payment_method",
-  "advance_returned", "checkin_payment_method", "amount_due", "subtotal", "late_fee", "damage_charges",
+  "advance_returned", "checkin_payment_method", "cash_received", "checkin_cash_received",
+  "amount_due", "subtotal", "late_fee", "tax_total", "damage_charges",
   "discount_amount", "discount_authorized_by", "total_amount",
   "invoice_id", "invoice_state", "notes", "terms",
   "is_late", "user_id", "customer_code",
@@ -173,6 +175,7 @@ const ORDER_LINE_FIELDS = [
   "period_type", "planned_duration", "actual_duration", "actual_duration_display",
   "returned_qty", "pending_qty", "rental_cost", "late_fee_amount", "total_cost",
   "checkout_condition", "checkin_condition", "damage_note", "damage_charge",
+  "tax_ids", "tax_amount", "price_before_tax",
   "discount_type", "discount_value", "discount_line_amount", "notes",
 ];
 

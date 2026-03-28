@@ -58,6 +58,8 @@
                         <field name="discount_line_amount" string="Disc. Amt"
                                readonly="1"
                                decoration-success="discount_line_amount > 0"/>
+                        <field name="tax_display" string="Tax %" readonly="1"/>
+                        <field name="tax_amount" string="Tax Amt" readonly="1"/>
                         <field name="planned_days" column_invisible="1"/>
                         <field name="currency_id" column_invisible="1"/>
                     </list>
@@ -79,8 +81,10 @@
                     <group>
                         <field name="rental_subtotal" readonly="1"
                                string="Rental Subtotal"/>
+                        <field name="tax_total" readonly="1"
+                               invisible="tax_total == 0"
+                               string="Tax"/>
                         <field name="total_late_fee" readonly="1"
-                               invisible="total_late_fee == 0"
                                string="Late Fees"
                                decoration-danger="total_late_fee > 0"/>
                         <field name="total_damage_charge" readonly="1"
@@ -101,10 +105,11 @@
                                invisible="advance_amount == 0 or not return_advance"
                                string="Advance (Returned)"
                                decoration-muted="1"/>
-                        <field name="balance_due" readonly="1"
+                        <field name="balance_due"
                                string="AMOUNT DUE"
                                class="oe_subtotal_footer_separator"
-                               decoration-danger="balance_due > 0"/>
+                               decoration-danger="balance_due > 0"
+                               force_save="1"/>
                     </group>
                 </group>
                 <separator string="Payment Method"/>
@@ -120,8 +125,9 @@
                         <field name="checkin_cash_received" string="Cash Received"/>
                     </group>
                     <group>
-                        <field name="checkin_cash_balance" readonly="1"
-                               string="Balance to Return"/>
+                        <field name="checkin_cash_balance"
+                               string="Balance to Return"
+                               force_save="1"/>
                     </group>
                 </group>
                 <separator string="Customer Signature (Required)"/>

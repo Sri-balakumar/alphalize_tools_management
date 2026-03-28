@@ -164,6 +164,8 @@
                                     <field name="returned_qty" column_invisible="1"/>
                                     <field name="pending_qty" column_invisible="1"/>
                                     <field name="qty_warning" column_invisible="1"/>
+                                    <field name="tax_ids" widget="many2many_tags" string="Tax" optional="show"/>
+                                    <field name="tax_amount" string="Tax Amt" optional="show"/>
                                     <field name="total_cost" sum="Total" string="Total"/>
                                     <field name="checkout_condition" string="Out Condition"
                                            readonly="1" optional="show"/>
@@ -175,6 +177,8 @@
                             <!-- Totals Summary -->
                             <group class="oe_subtotal_footer oe_right">
                                 <field name="subtotal" string="Subtotal"/>
+                                <field name="tax_total" string="Tax"
+                                       invisible="tax_total == 0"/>
                                 <field name="late_fee" string="Late Fees"
                                        invisible="late_fee == 0"/>
                                 <field name="damage_charges" string="Damage Charges"

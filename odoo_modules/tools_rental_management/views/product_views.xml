@@ -64,7 +64,8 @@
             (0, 0, {'view_mode': 'list', 'view_id': ref('view_rental_product_tree')}),
             (0, 0, {'view_mode': 'form', 'view_id': ref('view_rental_product_form')})]"/>
         <field name="search_view_id" ref="view_rental_product_search"/>
-        <field name="context">{}</field>
+        <field name="domain">[('is_rental_tool', '=', True)]</field>
+        <field name="context">{'default_is_rental_tool': True}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Create your first product for rental

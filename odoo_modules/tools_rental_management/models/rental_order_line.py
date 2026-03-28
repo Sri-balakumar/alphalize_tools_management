@@ -69,6 +69,17 @@ class RentalOrderLine(models.Model):
     total_cost = fields.Monetary(
         string='Total', compute='_compute_costs', store=True)
 
+    # Tax
+    tax_ids = fields.Many2many(
+        'account.tax', string='Taxes',
+        help='Taxes applied on this rental line (tax-inclusive).')
+    tax_amount = fields.Monetary(
+        string='Tax Amount',
+        compute='_compute_tax_amount', store=True)
+    price_before_tax = fields.Monetary(
+        string='Price Before Tax',
+        compute='_compute_tax_amount', store=True)
+
     # Condition tracking
     CONDITION_SELECTION = [
         ('excellent', 'Excellent'),
@@ -267,6 +278,11 @@ class RentalOrderLine(models.Model):
         self.tool_id = tool.id
         self._onchange_tool_id()
 
+        # 6. Auto-populate taxes from product
+        if product.taxes_id:
+            self.tax_ids = product.taxes_id.filtered(
+                lambda t: t.type_tax_use == 'sale')
+
     # ── Onchange: Tool selected → auto-assign pricing + price ──
     @api.onchange('tool_id')
     def _onchange_tool_id(self):
@@ -367,6 +383,24 @@ class RentalOrderLine(models.Model):
             line.total_cost = (line.rental_cost
                                + (line.late_fee_amount or 0)
                                - (line.discount_line_amount or 0))
+
+    @api.depends('rental_cost', 'tax_ids')
+    def _compute_tax_amount(self):
+        for line in self:
+            if line.tax_ids and line.rental_cost:
+                # Tax inclusive: price already includes tax, extract it
+                tax_res = line.tax_ids.compute_all(
+                    line.rental_cost,
+                    currency=line.currency_id,
+                    quantity=1,
+                    product=line.product_id,
+                    partner=line.order_id.partner_id,
+                )
+                line.price_before_tax = tax_res['total_excluded']
+                line.tax_amount = tax_res['total_included'] - tax_res['total_excluded']
+            else:
+                line.price_before_tax = line.rental_cost
+                line.tax_amount = 0.0
 
     def write(self, vals):
         """Handle direct writes from mobile app for condition and photo fields."""
