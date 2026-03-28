@@ -556,6 +556,8 @@ class RentalOrder(models.Model):
                     line.tool_id.state = 'rented'
             order.date_checkout = fields.Datetime.now()
             order.state = 'checked_out'
+            # Force recompute tax amounts on lines
+            order.line_ids._compute_tax_amount()
             # Create initial timesheet entry
             self.env['rental.timesheet'].create({
                 'order_id': order.id,
@@ -682,6 +684,8 @@ class RentalOrder(models.Model):
                 if line.tool_id.state == 'rented':
                     line.tool_id.state = 'available'
             order.state = 'checked_in'
+            # Force recompute tax amounts on lines
+            order.line_ids._compute_tax_amount()
             # Create timesheet entry
             notes = 'Tools returned by customer.'
             if damage_notes:

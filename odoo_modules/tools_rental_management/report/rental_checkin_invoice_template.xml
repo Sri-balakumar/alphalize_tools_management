@@ -225,11 +225,8 @@
                                         </t>
                                     </td>
                                     <td class="text-end">
-                                        <t t-if="line.tax_ids and line.rental_cost">
-                                            <t t-set="tax_computed" t-value="line.tax_ids.compute_all(line.rental_cost, currency=doc.currency_id, quantity=1, product=line.product_id, partner=doc.partner_id)"/>
-                                            <span t-esc="'%.3f' % (tax_computed['total_included'] - tax_computed['total_excluded'])"/>
-                                        </t>
-                                        <t t-else="">0.000</t>
+                                        <span t-field="line.tax_amount"
+                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
                                     </td>
                                 </tr>
                             </tbody>
@@ -661,11 +658,8 @@
                                         </t>
                                     </td>
                                     <td class="text-end">
-                                        <t t-if="line.tax_ids and line.rental_cost">
-                                            <t t-set="tax_computed" t-value="line.tax_ids.compute_all(line.rental_cost, currency=doc.currency_id, quantity=1, product=line.product_id, partner=doc.partner_id)"/>
-                                            <span t-esc="'%.3f' % (tax_computed['total_included'] - tax_computed['total_excluded'])"/>
-                                        </t>
-                                        <t t-else="">0.000</t>
+                                        <span t-field="line.tax_amount"
+                                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
                                     </td>
                                 </tr>
                             </tbody>
