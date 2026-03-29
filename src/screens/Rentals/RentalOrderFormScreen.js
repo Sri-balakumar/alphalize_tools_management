@@ -1049,6 +1049,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         if (!isPartial) {
           // Full check-in: all tools returned
           await storeCheckinOrder(odooAuth, odooOrderId);
+        } else {
+          // Partial: set partial_return_date on Odoo order
+          await updateOrderValues(odooAuth, odooOrderId, {
+            partial_return_date: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          });
         }
         // Partial: order stays as checked_out on Odoo (no action_checkin call)
       }
@@ -1206,41 +1211,42 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     }).join("");
 
     const isA5 = invoicePaperSize === "a5";
-    const sigW = isA5 ? 80 : 160;
-    const sigH = isA5 ? 30 : 60;
-    const sigFontSize = isA5 ? "8px" : "11px";
+    const sigW = isA5 ? 80 : 120;
+    const sigH = isA5 ? 30 : 45;
+    const sigFontSize = isA5 ? "8px" : "10px";
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       @page { size: ${isA5 ? "148mm 210mm" : "A4"} portrait; margin: ${isA5 ? "4mm" : "8mm"}; }
-      body { font-family: Arial, Helvetica, sans-serif; padding: ${isA5 ? "4px" : "12px"}; color: #333; font-size: ${isA5 ? "7px" : "11px"}; line-height: ${isA5 ? "1.2" : "1.3"}; }
-      .invoice-header { display: flex; align-items: center; margin-bottom: ${isA5 ? "4px" : "10px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "8px"}; }
+      body { font-family: Arial, Helvetica, sans-serif; padding: ${isA5 ? "4px" : "8px"}; color: #333; font-size: ${isA5 ? "7px" : "10px"}; line-height: ${isA5 ? "1.2" : "1.2"}; }
+      .invoice-header { display: flex; align-items: center; margin-bottom: ${isA5 ? "3px" : "4px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "4px"}; }
       .invoice-header .header-left { flex: 1; text-align: left; }
       .invoice-header .header-center { flex: 2; text-align: center; }
       .invoice-header .header-right { flex: 1; text-align: right; direction: rtl; }
       h2.title { text-align: center; color: #2c3e50; margin: 0 0 ${isA5 ? "1px" : "2px"} 0; font-size: ${isA5 ? "10px" : "16px"}; }
       h4.sub { text-align: center; color: #888; margin: 0 0 ${isA5 ? "3px" : "8px"} 0; font-size: ${isA5 ? "7.5px" : "12px"}; }
-      .row { display: flex; gap: ${isA5 ? "6px" : "20px"}; margin-bottom: ${isA5 ? "3px" : "12px"}; }
+      .row { display: flex; gap: ${isA5 ? "6px" : "10px"}; margin-bottom: ${isA5 ? "2px" : "4px"}; }
       .col { flex: 1; }
       .badge { text-align: center; margin-bottom: ${isA5 ? "3px" : "12px"}; }
       .badge span { background: #714B67; color: #fff; padding: ${isA5 ? "1px 8px" : "6px 18px"}; border-radius: 4px; font-size: ${isA5 ? "6.5px" : "13px"}; font-weight: 700; letter-spacing: 1px; }
-      table.details { width: 100%; margin-bottom: ${isA5 ? "3px" : "12px"}; border-collapse: collapse; }
-      table.details td { padding: ${isA5 ? "1px 3px" : "4px 8px"}; font-size: ${isA5 ? "6.5px" : "12px"}; }
+      table.details { width: 100%; margin-bottom: ${isA5 ? "2px" : "4px"}; border-collapse: collapse; }
+      table.details td { padding: ${isA5 ? "1px 3px" : "1px 6px"}; font-size: ${isA5 ? "6.5px" : "10px"}; }
       table.details td strong { color: #333; }
       h5 { margin: ${isA5 ? "3px 0 2px" : "8px 0 4px"}; color: #333; font-size: ${isA5 ? "8px" : "13px"}; }
-      table.tools { width: 100%; border-collapse: collapse; margin-bottom: ${isA5 ? "3px" : "8px"}; font-size: ${isA5 ? "6.5px" : "11px"}; }
+      table.tools { width: 100%; border-collapse: collapse; margin-bottom: ${isA5 ? "2px" : "4px"}; font-size: ${isA5 ? "6.5px" : "9px"}; }
       table.tools th { background: #e9ecef; color: #333; padding: ${isA5 ? "1.5px 2px" : "4px 6px"}; text-align: left; font-size: ${isA5 ? "6px" : "10px"}; border: 1px solid #dee2e6; }
       table.tools td { padding: ${isA5 ? "1.5px 2px" : "3px 6px"}; border: 1px solid #dee2e6; }
       .text-end { text-align: right; }
       table.totals { width: ${isA5 ? "55%" : "50%"}; margin-left: auto; border-collapse: collapse; }
-      table.totals td { padding: ${isA5 ? "1.5px 3px" : "2px 8px"}; font-size: ${isA5 ? "7px" : "11px"}; }
+      table.totals td { padding: ${isA5 ? "1.5px 3px" : "1px 6px"}; font-size: ${isA5 ? "7px" : "10px"}; }
       .grand-row { border-top: 2px solid #000; }
       .grand-row td { font-size: ${isA5 ? "7.5px" : "14px"}; font-weight: 700; }
       .late-banner { background: #fff3cd; border: 1px solid #ffc107; padding: ${isA5 ? "2px 4px" : "8px 12px"}; margin-bottom: ${isA5 ? "3px" : "10px"}; border-radius: 4px; font-size: ${isA5 ? "6.5px" : "12px"}; }
       .late-banner strong { color: #856404; }
       .late-banner span { color: #856404; }
-      .sig-row { display: flex; margin-top: ${isA5 ? "5px" : "8px"}; page-break-inside: avoid; }
+      .sig-row { display: flex; margin-top: ${isA5 ? "5px" : "8px"}; page-break-inside: avoid; page-break-before: avoid; }
+      .terms-section { page-break-inside: auto; page-break-before: auto; }
       .sig-col { flex: 1; text-align: center; }
       .sig-col hr { border: none; border-top: 1px solid #333; width: 80%; margin: 0 auto ${isA5 ? "1px" : "4px"}; }
       .footer { margin-top: ${isA5 ? "3px" : "4px"}; font-size: ${isA5 ? "5.5px" : "8px"}; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: ${isA5 ? "1px" : "2px"}; page-break-inside: avoid; }
@@ -1368,14 +1374,14 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </table>
     </div>
 
-    ${!isCheckin ? `<div style="margin-top:${isA5 ? "3px" : "8px"};border-top:1px solid #ccc;padding-top:${isA5 ? "2px" : "6px"};">
-      <h5 style="margin:0 0 ${isA5 ? "1px" : "4px"} 0;font-size:${isA5 ? "6.5px" : "10px"};">Terms &amp; Conditions / الشروط والأحكام</h5>
-      <table style="width:100%;border-collapse:collapse;font-size:${isA5 ? "6px" : "8px"};color:#444;">
+    ${!isCheckin || isPartialReturn ? `<div class="terms-section" style="margin-top:${isA5 ? "3px" : "6px"};border-top:1px solid #ccc;padding-top:${isA5 ? "2px" : "4px"};">
+      <h5 style="margin:0 0 ${isA5 ? "1px" : "3px"} 0;font-size:${isA5 ? "6.5px" : "9px"};">Terms &amp; Conditions / الشروط والأحكام</h5>
+      <table style="width:100%;border-collapse:collapse;font-size:${isA5 ? "5.5px" : "7px"};color:#444;">
         <tbody>
           ${DEFAULT_TERMS_EN.map((t, i) => `<tr style="border-bottom:1px solid #f0f0f0;">
-            <td style="padding:${isA5 ? "0.5px 1px" : "1px 4px"};vertical-align:top;font-weight:600;width:3%;">${i + 1}.</td>
-            <td style="padding:${isA5 ? "0.5px 1px" : "1px 4px"};vertical-align:top;line-height:${isA5 ? "1.2" : "1.3"};width:50%;">${t}</td>
-            <td style="padding:${isA5 ? "0.5px 1px" : "1px 4px"};vertical-align:top;text-align:right;direction:rtl;line-height:${isA5 ? "1.2" : "1.4"};width:47%;">${DEFAULT_TERMS_AR[i]}</td>
+            <td style="padding:${isA5 ? "0.5px 1px" : "0.5px 3px"};vertical-align:top;font-weight:600;width:3%;">${i + 1}.</td>
+            <td style="padding:${isA5 ? "0.5px 1px" : "0.5px 3px"};vertical-align:top;line-height:${isA5 ? "1.1" : "1.2"};width:50%;">${t}</td>
+            <td style="padding:${isA5 ? "0.5px 1px" : "0.5px 3px"};vertical-align:top;text-align:right;direction:rtl;line-height:${isA5 ? "1.1" : "1.2"};width:47%;">${DEFAULT_TERMS_AR[i]}</td>
           </tr>`).join("")}
         </tbody>
       </table>

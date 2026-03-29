@@ -176,7 +176,7 @@ const ORDER_LINE_FIELDS = [
   "returned_qty", "pending_qty", "rental_cost", "late_fee_amount", "total_cost",
   "checkout_condition", "checkin_condition", "damage_note", "damage_charge",
   "tax_ids", "tax_amount", "price_before_tax",
-  "discount_type", "discount_value", "discount_line_amount", "notes",
+  "discount_type", "discount_value", "discount_line_amount", "notes", "extra_days",
 ];
 
 const ORDER_LINE_IMAGE_FIELDS = [
@@ -574,7 +574,7 @@ const mapOrderLine = (l) => ({
   discount_value: String(l.discount_value || 0),
   discount_line_amount: l.discount_line_amount || 0,
   notes: l.notes || "",
-  extra_days: String(Math.max(0, (parseInt(l.actual_duration) || 0) - (parseInt(l.planned_duration) || 0))),
+  extra_days: String(l.extra_days || 0),
   late_fee_per_day: String(l.late_fee_per_day || 0),
   tax_ids: l.tax_ids || [],
   tax_amount: String(l.tax_amount || 0),
