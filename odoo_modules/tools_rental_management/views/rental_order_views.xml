@@ -48,6 +48,9 @@
                     <button name="action_print_checkout_invoice" type="object"
                             string="Print Checkout Invoice"
                             invisible="state not in ('checked_out', 'checked_in', 'invoiced')"/>
+                    <button name="action_print_partial_return_invoice" type="object"
+                            string="Print Partial Return Invoice"
+                            invisible="state not in ('checked_out', 'checked_in', 'invoiced') or not partial_return_date"/>
                     <button name="action_done" type="object"
                             string="Mark Done" class="btn-primary"
                             invisible="state != 'checked_in'"/>

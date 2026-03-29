@@ -48,6 +48,8 @@ class RentalOrder(models.Model):
         string='Actual Check-Out', tracking=True, copy=False)
     date_checkin = fields.Datetime(
         string='Actual Check-In', tracking=True, copy=False)
+    partial_return_date = fields.Datetime(
+        string='Partial Return Date', copy=False)
 
     # ── Rental Period Config ────────────────────────────────────────────
     rental_period_type = fields.Selection([
@@ -522,6 +524,8 @@ class RentalOrder(models.Model):
                 order.customer_code = self.env['ir.sequence'].next_by_code(
                     'rental.customer') or 'CUS/0001'
             order.state = 'confirmed'
+            # Force compute tax on lines
+            order.line_ids._compute_tax_amount()
 
     def action_checkout_wizard(self):
         """Open checkout wizard for ID proof and signature capture."""
@@ -858,5 +862,20 @@ class RentalOrder(models.Model):
             'context': {
                 'default_order_id': self.id,
                 'default_report_type': 'checkin',
+            },
+        }
+
+    def action_print_partial_return_invoice(self):
+        """Open print wizard for partial return invoice."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Print Partial Return Invoice'),
+            'res_model': 'rental.print.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_order_id': self.id,
+                'default_report_type': 'partial_return',
             },
         }

@@ -28,7 +28,7 @@ import * as Print from "expo-print";
 import { Asset } from "expo-asset";
 import SignaturePad from "@components/common/SignaturePad/SignaturePad";
 import CameraCapture from "@components/common/CameraCapture/CameraCapture";
-import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, updateCustomer, fetchCustomerImages, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails } from "@api/services/odooService";
+import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, downloadPartialReturnInvoice, updateCustomer, fetchCustomerImages, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails } from "@api/services/odooService";
 import { isEmail, isPhone, getPhoneLength, getEmailSuggestion } from "@utils/validation/validation";
 
 const PERIOD_TYPES = [
@@ -177,7 +177,27 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     terms: existingOrder?.terms || DEFAULT_TERMS_TEXT,
   });
 
-  const [lines, setLines] = useState(existingOrder?.lines || []);
+  const [rawLines, setLines] = useState(existingOrder?.lines || []);
+
+  // Always ensure tax data is present — compute from tools if missing
+  const lines = useMemo(() => {
+    if (!tools || tools.length === 0) return rawLines;
+    return rawLines.map(fl => {
+      if (parseFloat(fl.tax_amount) > 0) return fl;
+      if (!fl.tool_id) return fl;
+      const tool = tools.find(t => Number(t.odoo_id || t.id) === Number(fl.tool_id));
+      if (!tool || !(parseFloat(tool.tax_rate) > 0)) return fl;
+      const price = parseFloat(fl.unit_price) || 0;
+      const dur = parseFloat(fl.planned_duration) || 1;
+      const qty = parseFloat(fl.quantity) || 1;
+      const multiplier = LINE_DAY_MULTIPLIERS[fl.period_type || "day"] || 1;
+      const rentalCost = price * dur * multiplier * qty;
+      const taxRate = parseFloat(tool.tax_rate);
+      const taxAmt = rentalCost * taxRate / 100;
+      return { ...fl, tax_rate: taxRate, tax_amount: taxAmt.toFixed(3), price_before_tax: rentalCost.toFixed(3) };
+    });
+  }, [rawLines, tools]);
+
   const [timesheet, setTimesheet] = useState(existingOrder?.timesheet || []);
   const [errors, setErrors] = useState({});
   const [activeTab, setActiveTab] = useState("lines");
@@ -1089,6 +1109,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
 
   const buildInvoiceHtml = (type, assets = {}) => {
     const isCheckin = type === "checkin";
+    const isPartialReturn = type === "partial_return";
     const subtotal = calcSubtotal();
     const taxTotal = calcTaxTotal();
     const lateFees = isCheckin ? calcLateFees() : 0;
@@ -1131,6 +1152,26 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td class="text-end">${lineTaxAmt > 0 ? cur + lineTaxAmt.toFixed(3) : ''}</td>
       </tr>`;
     }).join("");
+
+    // Partial return: filter to only returned lines
+    const partialReturnToolRows = lines
+      .filter(l => parseFloat(l.returned_qty) > 0)
+      .map((l, i) => {
+        const rentalCost = calcLineTotal(l);
+        const lineTaxAmt = parseFloat(l.tax_amount) || 0;
+        const lineTaxRate = parseFloat(l.tax_rate) > 0 ? l.tax_rate + '%' : (lineTaxAmt > 0 ? ((lineTaxAmt / ((parseFloat(l.price_before_tax) || rentalCost) || 1)) * 100).toFixed(1) + '%' : '');
+        return `<tr>
+          <td>${i + 1}</td>
+          <td>${l.tool_name || "-"}</td>
+          <td>${l.serial_number || ""}</td>
+          <td>${l.checkout_condition || ""}</td>
+          <td class="text-end">${cur}${(parseFloat(l.unit_price) || 0).toFixed(3)}</td>
+          <td class="text-end">${parseInt(l.planned_duration) || 1} ${((d, pt) => d === 1 ? ({"day":"Day","week":"Week","month":"Month"})[pt] || "Day" : ({"day":"Days","week":"Weeks","month":"Months"})[pt] || "Days")(parseInt(l.planned_duration) || 1, l.period_type || form.rental_period_type || "day")}</td>
+          <td class="text-end">${cur}${rentalCost.toFixed(3)}</td>
+          <td class="text-end">${lineTaxRate}</td>
+          <td class="text-end">${lineTaxAmt > 0 ? cur + lineTaxAmt.toFixed(3) : ''}</td>
+        </tr>`;
+      }).join("");
 
     // --- Checkin tool rows (more columns) ---
     const checkinToolRows = lines.map((l, i) => {
@@ -1217,7 +1258,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       </div>
       <div class="header-center">
         ${assets.logo ? `<div style="margin-bottom:${isA5 ? "3px" : "6px"};"><img src="${assets.logo}" style="width:${isA5 ? "80px" : "130px"};height:auto;" /></div>` : ""}
-        <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : "CHECKOUT INVOICE"}</h2>
+        <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : isPartialReturn ? "PARTIAL RETURN INVOICE" : "CHECKOUT INVOICE"}</h2>
         <h4 class="sub">${form.name || "New Order"}</h4>
         ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
       </div>
@@ -1248,6 +1289,11 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <td><strong>Check-Out Date:</strong></td>
         <td>${form.date_checkout || form.date_planned_checkout || "-"}</td>
       </tr>
+      ${isPartialReturn ? `<tr>
+        <td><strong>Partial Return Date:</strong></td>
+        <td>${new Date().toLocaleString()}</td>
+        <td></td><td></td>
+      </tr>` : ""}
       ${isCheckin ? `<tr>
         <td><strong>Check-In Date:</strong></td>
         <td>${form.date_checkin || "-"}</td>
@@ -1284,7 +1330,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         <th>#</th><th>Tool</th><th>Serial No.</th><th>Condition</th>
         <th class="text-end">Price</th><th class="text-end">Duration</th><th class="text-end">Total</th><th class="text-end">Tax %</th><th class="text-end">Tax Amt</th>
       </tr></thead>
-      <tbody>${checkoutToolRows}</tbody>
+      <tbody>${isPartialReturn ? partialReturnToolRows : checkoutToolRows}</tbody>
     </table>` : `<table class="tools">
       <thead><tr>
         <th>#</th><th>Tool</th><th>S/N</th><th>Out</th><th>In</th>
@@ -1338,7 +1384,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     <div class="sig-row" style="${!isCheckin ? 'justify-content:center;' : ''}">
       <div class="sig-col" style="${!isCheckin ? 'flex:none;min-width:200px;' : ''}">
         ${(() => {
-        const sigImg = isCheckin ? assets.checkinSignature : assets.checkoutSignature;
+        const sigImg = (isCheckin || isPartialReturn) ? assets.checkinSignature : assets.checkoutSignature;
         const sigName = form.partner_name || "";
         const sigTime = isCheckin
           ? (form.checkin_signature_time || form.date_checkin || new Date().toLocaleString())
@@ -1382,7 +1428,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const fetchOdooPdf = async () => {
     if (!odooOrderId || !odooAuth) return null;
     try {
-      const downloadFn = invoiceType === "checkout" ? downloadCheckoutInvoice : downloadCheckinInvoice;
+      const downloadFn = invoiceType === "checkout" ? downloadCheckoutInvoice : invoiceType === "partial_return" ? downloadPartialReturnInvoice : downloadCheckinInvoice;
       const fileUri = await downloadFn(odooAuth, odooOrderId, invoicePaperSize);
       return fileUri;
     } catch (e) {
@@ -1799,7 +1845,30 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             terms: fresh.terms || "",
           };
           setForm(freshForm);
-          const freshLines = fresh.lines || [];
+          const freshLines = (fresh.lines || []).map((fl) => {
+            // If tax_amount is 0 but tool has tax, compute locally
+            const flToolId = Number(fl.tool_id);
+            if (!(parseFloat(fl.tax_amount) > 0) && flToolId && tools && tools.length > 0) {
+              const tool = tools.find(t => Number(t.odoo_id || t.id) === flToolId);
+              if (tool && parseFloat(tool.tax_rate) > 0) {
+                const price = parseFloat(fl.unit_price) || 0;
+                const dur = parseFloat(fl.planned_duration) || 1;
+                const qty = parseFloat(fl.quantity) || 1;
+                const multiplier = LINE_DAY_MULTIPLIERS[fl.period_type || "day"] || 1;
+                const rentalCost = price * dur * multiplier * qty;
+                const taxRate = parseFloat(tool.tax_rate);
+                const taxAmt = rentalCost * taxRate / 100;
+                return {
+                  ...fl,
+                  tax_rate: taxRate,
+                  tax_amount: taxAmt.toFixed(3),
+                  price_before_tax: rentalCost.toFixed(3),
+                  tax_ids: [{ name: taxRate + '%' }],
+                };
+              }
+            }
+            return fl;
+          });
           setLines(freshLines);
           setTimesheet(fresh.timesheet || []);
           setOdooOrderId(fresh.odoo_id);
@@ -2235,6 +2304,12 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         {["checked_out", "checked_in", "invoiced"].includes(state) && (
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#1565C0" }]} onPress={() => openInvoiceModal("checkout")} disabled={saving}>
             <Text style={styles.actionBtnText}>Checkout Invoice</Text>
+          </TouchableOpacity>
+        )}
+        {/* Print Partial Return Invoice: visible when partial returns exist */}
+        {["checked_out", "checked_in", "invoiced"].includes(state) && (lines.some(l => parseFloat(l.returned_qty) > 0) || existingOrder?.partial_return_date) && (
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#FF6F00" }]} onPress={() => openInvoiceModal("partial_return")} disabled={saving}>
+            <Text style={styles.actionBtnText}>Partial Return Invoice</Text>
           </TouchableOpacity>
         )}
         {/* Print Check-In Invoice: visible only at invoiced (matches Odoo) */}
@@ -3915,7 +3990,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                     </View>
                   </View>
                   {parseFloat(line.tax_amount || 0) > 0 && (
-                    <View style={[styles.lineMetricsRow, { marginTop: 4 }]}>
+                    <View style={styles.lineMetricsRow}>
                       <View style={styles.lineMetric}>
                         <Text style={styles.lineMetricLabel}>Tax %</Text>
                         <Text style={[styles.lineMetricValue, { color: "#E65100" }]}>
@@ -3927,8 +4002,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
                         <Text style={[styles.lineMetricValue, { color: "#E65100", fontWeight: "700" }]}>ر.ع.{parseFloat(line.tax_amount).toFixed(3)}</Text>
                       </View>
                       <View style={[styles.lineMetric, { alignItems: "flex-end" }]}>
-                        <Text style={styles.lineMetricLabel}>Before Tax</Text>
-                        <Text style={styles.lineMetricValue}>ر.ع.{(parseFloat(line.price_before_tax) || calcLineTotal(line)).toFixed(3)}</Text>
+                        <Text style={[styles.lineMetricLabel, { textAlign: "right" }]}>Before Tax</Text>
+                        <Text style={[styles.lineMetricValue, { textAlign: "right" }]}>ر.ع.{(parseFloat(line.price_before_tax) || calcLineTotal(line)).toFixed(3)}</Text>
                       </View>
                     </View>
                   )}
@@ -4603,7 +4678,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
             />
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: "#333" }}>
-                {invoiceType === "checkout" ? "Checkout Invoice" : "Check-In Invoice"}
+                {invoiceType === "checkout" ? "Checkout Invoice" : invoiceType === "partial_return" ? "Partial Return Invoice" : "Check-In Invoice"}
               </Text>
               <TouchableOpacity onPress={() => setShowInvoiceModal(false)}>
                 <Text style={{ fontSize: 22, color: "#999", fontWeight: "700" }}>X</Text>
@@ -5114,11 +5189,11 @@ const styles = StyleSheet.create({
   selectedToolSub: { fontSize: 11, color: "#888" },
 
   // Line metrics (Price / Duration / Total)
-  lineMetricsRow: { flexDirection: "row", gap: 10, marginTop: 8 },
+  lineMetricsRow: { flexDirection: "row", marginTop: 8, gap: 8 },
   lineMetric: { flex: 1 },
   lineMetricLabel: { fontSize: 11, fontWeight: "600", color: "#888", marginBottom: 4 },
-  lineMetricValue: { fontSize: 14, fontWeight: "500", color: COLORS.black },
-  lineTotalText: { fontSize: 16, fontWeight: "700", color: COLORS.primaryThemeColor, marginTop: 4 },
+  lineMetricValue: { fontSize: 13, fontWeight: "500", color: COLORS.black },
+  lineTotalText: { fontSize: 15, fontWeight: "700", color: COLORS.primaryThemeColor, textAlign: "right" },
 
   conditionDisplayRow: { flexDirection: "row", gap: 12, paddingVertical: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#f0f0f0", marginTop: 8 },
   conditionDisplayText: { fontSize: 11, color: "#888", textTransform: "capitalize" },

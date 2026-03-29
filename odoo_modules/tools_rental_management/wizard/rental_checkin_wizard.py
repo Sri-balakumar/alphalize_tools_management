@@ -291,6 +291,9 @@ class RentalCheckinWizard(models.TransientModel):
                 (self.order_id.damage_charges or 0) + total_damage
             )
 
+        # Set partial return date
+        self.order_id.partial_return_date = fields.Datetime.now()
+
         # Timesheet entry
         returned_items = ', '.join(
             f"{l.tool_id.name} x{int(l.return_qty)}"

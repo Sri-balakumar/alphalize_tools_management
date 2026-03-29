@@ -387,6 +387,12 @@ class RentalOrderLine(models.Model):
     @api.depends('rental_cost', 'tax_ids')
     def _compute_tax_amount(self):
         for line in self:
+            # Auto-populate tax_ids from product if empty
+            if not line.tax_ids and line.product_id and line.product_id.taxes_id:
+                sale_taxes = line.product_id.taxes_id.filtered(
+                    lambda t: t.type_tax_use == 'sale')
+                if sale_taxes:
+                    line.tax_ids = sale_taxes
             if line.tax_ids and line.rental_cost:
                 # Tax inclusive: price already includes tax, extract it
                 tax_res = line.tax_ids.compute_all(

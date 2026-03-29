@@ -72,4 +72,25 @@
         <field name="print_report_name">'CheckIn_Invoice_%s' % object.name</field>
         <field name="paperformat_id" ref="paperformat_rental_a5"/>
     </record>
+
+    <!-- ═══ PARTIAL RETURN INVOICE REPORTS ═══ -->
+    <record id="action_report_partial_return_invoice_a4" model="ir.actions.report">
+        <field name="name">Partial Return Invoice (A4)</field>
+        <field name="model">rental.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tools_rental_management.report_partial_return_invoice</field>
+        <field name="report_file">tools_rental_management.report_partial_return_invoice</field>
+        <field name="print_report_name">'PartialReturn_Invoice_%s' % object.name</field>
+        <field name="paperformat_id" ref="paperformat_rental_a4"/>
+    </record>
+
+    <record id="action_report_partial_return_invoice_a5" model="ir.actions.report">
+        <field name="name">Partial Return Invoice (A5)</field>
+        <field name="model">rental.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tools_rental_management.report_partial_return_invoice_a5</field>
+        <field name="report_file">tools_rental_management.report_partial_return_invoice_a5</field>
+        <field name="print_report_name">'PartialReturn_Invoice_%s' % object.name</field>
+        <field name="paperformat_id" ref="paperformat_rental_a5"/>
+    </record>
 </odoo>

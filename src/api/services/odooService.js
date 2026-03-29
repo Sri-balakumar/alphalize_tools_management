@@ -159,7 +159,7 @@ const ORDER_FIELDS = [
   "amount_due", "subtotal", "late_fee", "tax_total", "damage_charges",
   "discount_amount", "discount_authorized_by", "total_amount",
   "invoice_id", "invoice_state", "notes", "terms",
-  "is_late", "user_id", "customer_code",
+  "is_late", "user_id", "customer_code", "partial_return_date",
   "line_ids",
 ];
 
@@ -434,6 +434,13 @@ export const downloadCheckinInvoice = async (auth, orderId, paperSize = "a4") =>
   return downloadReportPdf(auth, reportName, Number(orderId));
 };
 
+export const downloadPartialReturnInvoice = async (auth, orderId, paperSize = "a4") => {
+  const reportName = paperSize === "a5"
+    ? "tools_rental_management.report_partial_return_invoice_a5"
+    : "tools_rental_management.report_partial_return_invoice";
+  return downloadReportPdf(auth, reportName, Number(orderId));
+};
+
 // Send invoice PDF via WhatsApp
 export const sendInvoiceWhatsApp = async (auth, orderId, invoiceType, customerPhone, paperSize = "a4") => {
   let reportName;
@@ -441,6 +448,10 @@ export const sendInvoiceWhatsApp = async (auth, orderId, invoiceType, customerPh
     reportName = paperSize === "a5"
       ? "tools_rental_management.report_checkout_invoice_a5"
       : "tools_rental_management.report_checkout_invoice";
+  } else if (invoiceType === "partial_return") {
+    reportName = paperSize === "a5"
+      ? "tools_rental_management.report_partial_return_invoice_a5"
+      : "tools_rental_management.report_partial_return_invoice";
   } else {
     reportName = paperSize === "a5"
       ? "tools_rental_management.report_checkin_invoice_a5"
@@ -565,9 +576,10 @@ const mapOrderLine = (l) => ({
   notes: l.notes || "",
   extra_days: String(Math.max(0, (parseInt(l.actual_duration) || 0) - (parseInt(l.planned_duration) || 0))),
   late_fee_per_day: String(l.late_fee_per_day || 0),
-  tax_ids: l.tax_ids ? l.tax_ids.map(t => ({ name: Array.isArray(t) ? t[1] : t })) : [],
+  tax_ids: l.tax_ids || [],
   tax_amount: String(l.tax_amount || 0),
   price_before_tax: String(l.price_before_tax || 0),
+  tax_rate: (l.tax_amount && l.price_before_tax && l.price_before_tax > 0) ? parseFloat(((l.tax_amount / l.price_before_tax) * 100).toFixed(2)) : 0,
   checkout_tool_image: l.checkout_tool_image || false,
 });
 
@@ -798,6 +810,7 @@ export default {
   createInvoice,
   downloadCheckoutInvoice,
   downloadCheckinInvoice,
+  downloadPartialReturnInvoice,
   openCheckoutWizard,
   openCheckinWizard,
   fetchCustomers,

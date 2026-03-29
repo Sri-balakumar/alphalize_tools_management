@@ -58,6 +58,7 @@
         'report/rental_invoice_reports.xml',
         'report/rental_checkout_invoice_template.xml',
         'report/rental_checkin_invoice_template.xml',
+        'report/rental_partial_return_invoice_template.xml',
         'wizard/rental_print_wizard_views.xml',
         'views/res_partner_views.xml',
         'views/rental_menus.xml',

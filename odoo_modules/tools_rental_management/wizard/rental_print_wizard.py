@@ -11,6 +11,7 @@ class RentalPrintWizard(models.TransientModel):
     report_type = fields.Selection([
         ('checkout', 'Checkout Invoice'),
         ('checkin', 'Check-In Invoice'),
+        ('partial_return', 'Partial Return Invoice'),
     ], string='Invoice Type', required=True)
     paper_size = fields.Selection([
         ('a4', 'A4'),
@@ -22,6 +23,8 @@ class RentalPrintWizard(models.TransientModel):
         ('checkout', 'a5'): 'tools_rental_management.action_report_checkout_invoice_a5',
         ('checkin', 'a4'): 'tools_rental_management.action_report_checkin_invoice_a4',
         ('checkin', 'a5'): 'tools_rental_management.action_report_checkin_invoice_a5',
+        ('partial_return', 'a4'): 'tools_rental_management.action_report_partial_return_invoice_a4',
+        ('partial_return', 'a5'): 'tools_rental_management.action_report_partial_return_invoice_a5',
     }
 
     def action_print(self):
@@ -67,7 +70,7 @@ class RentalPrintWizard(models.TransientModel):
         except Exception as e:
             raise UserError(_("Failed to generate PDF: %s") % str(e))
 
-        invoice_type = 'CheckIn' if self.report_type == 'checkin' else 'Checkout'
+        invoice_type = 'CheckIn' if self.report_type == 'checkin' else ('PartialReturn' if self.report_type == 'partial_return' else 'Checkout')
         filename = f"{invoice_type}_Invoice_{self.order_id.name}.pdf"
         caption = f"{invoice_type} Invoice - {self.order_id.name}"
 
