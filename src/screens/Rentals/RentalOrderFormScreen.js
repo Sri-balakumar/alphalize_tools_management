@@ -1174,7 +1174,10 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       @page { size: ${isA5 ? "148mm 210mm" : "A4"} portrait; margin: ${isA5 ? "4mm" : "8mm"}; }
       body { font-family: Arial, Helvetica, sans-serif; padding: ${isA5 ? "4px" : "12px"}; color: #333; font-size: ${isA5 ? "7px" : "11px"}; line-height: ${isA5 ? "1.2" : "1.3"}; }
-      .invoice-header { text-align: center; margin-bottom: ${isA5 ? "4px" : "10px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "8px"}; }
+      .invoice-header { display: flex; align-items: center; margin-bottom: ${isA5 ? "4px" : "10px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "8px"}; }
+      .invoice-header .header-left { flex: 1; text-align: left; }
+      .invoice-header .header-center { flex: 2; text-align: center; }
+      .invoice-header .header-right { flex: 1; text-align: right; direction: rtl; }
       h2.title { text-align: center; color: #2c3e50; margin: 0 0 ${isA5 ? "1px" : "2px"} 0; font-size: ${isA5 ? "10px" : "16px"}; }
       h4.sub { text-align: center; color: #888; margin: 0 0 ${isA5 ? "3px" : "8px"} 0; font-size: ${isA5 ? "7.5px" : "12px"}; }
       .row { display: flex; gap: ${isA5 ? "6px" : "20px"}; margin-bottom: ${isA5 ? "3px" : "12px"}; }
@@ -1204,10 +1207,27 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     </style></head><body>
 
     <div class="invoice-header">
-      ${assets.logo ? `<div style="margin-bottom:${isA5 ? "3px" : "6px"};"><img src="${assets.logo}" style="width:${isA5 ? "80px" : "130px"};height:auto;" /></div>` : ""}
-      <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : "CHECKOUT INVOICE"}</h2>
-      <h4 class="sub">${form.name || "New Order"}</h4>
-      ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
+      <div class="header-left">
+        <div style="font-size:${isA5 ? "10px" : "18px"};font-weight:900;color:#00AEEF;letter-spacing:1px;">SMART VISION</div>
+        <div style="font-size:${isA5 ? "7px" : "12px"};font-weight:700;color:#333;">INTERNATIONAL L.L.C</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;margin-top:1px;">C.R No: 1199264 P.O:534, PC.:111, Sultanate of oman</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;">GSM: 97117880, 99047066</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;">Branch: AI Mawaleh  smartvisionllc1313@gmail.com</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;">VAT No: OM110025049X</div>
+      </div>
+      <div class="header-center">
+        ${assets.logo ? `<div style="margin-bottom:${isA5 ? "3px" : "6px"};"><img src="${assets.logo}" style="width:${isA5 ? "80px" : "130px"};height:auto;" /></div>` : ""}
+        <h2 class="title">${isCheckin ? "CHECK-IN INVOICE" : "CHECKOUT INVOICE"}</h2>
+        <h4 class="sub">${form.name || "New Order"}</h4>
+        ${(form.customer_id || form.partner_id) ? `<div class="badge"><span>Customer ID: ${form.customer_id || form.partner_id}</span></div>` : ""}
+      </div>
+      <div class="header-right">
+        <div style="font-size:${isA5 ? "10px" : "18px"};font-weight:900;color:#00AEEF;">الرؤية الذكية</div>
+        <div style="font-size:${isA5 ? "7px" : "12px"};font-weight:700;color:#333;">الدولية ش.م.م</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;margin-top:1px;">س.ت: ١١٩٩٢٦٤ ص.ب:٥٣٤، ر.ب:١١١، سلطنة عمان</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;">هاتف: ٩٧١١٧٨٨٠، ٩٩٠٤٧٠٦٦</div>
+        <div style="font-size:${isA5 ? "5px" : "9px"};color:#333;">فرع: الموالح  smartvisionllc1313@gmail.com</div>
+      </div>
     </div>
 
     <div class="row">
