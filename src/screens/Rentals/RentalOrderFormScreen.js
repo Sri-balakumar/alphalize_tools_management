@@ -1184,7 +1184,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       body { font-family: Arial, Helvetica, sans-serif; padding: ${isA5 ? "4px" : "8px"}; color: #333; font-size: ${isA5 ? "7px" : "10px"}; line-height: ${isA5 ? "1.2" : "1.2"}; }
       .invoice-header { display: flex; align-items: center; margin-bottom: ${isA5 ? "3px" : "4px"}; border-bottom: 2px solid #2c3e50; padding-bottom: ${isA5 ? "3px" : "4px"}; }
       .invoice-header .header-left { flex: 1; text-align: left; }
-      .invoice-header .header-center { flex: 2; text-align: center; }
+      .invoice-header .header-center { flex: 1; text-align: center; }
       .invoice-header .header-right { flex: 1; text-align: right; direction: rtl; }
       h2.title { text-align: center; color: #2c3e50; margin: 0 0 ${isA5 ? "1px" : "2px"} 0; font-size: ${isA5 ? "10px" : "16px"}; }
       h4.sub { text-align: center; color: #888; margin: 0 0 ${isA5 ? "3px" : "8px"} 0; font-size: ${isA5 ? "7.5px" : "12px"}; }
