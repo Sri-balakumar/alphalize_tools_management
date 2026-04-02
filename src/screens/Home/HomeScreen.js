@@ -28,6 +28,7 @@ const MENU_ITEMS = [
   { id: "7", title: "Tool Availability", screen: "ToolAvailabilityScreen", icon: "bar-chart", bg: "#E8EAF6", accent: "#3F51B5" },
   { id: "8", title: "Order Reports", screen: "OrderReportsScreen", icon: "description", bg: "#FBE9E7", accent: "#FF5722" },
   { id: "9", title: "Discount Details", screen: "DiscountDetailsScreen", icon: "local-offer", bg: "#FCE4EC", accent: "#E91E63" },
+  { id: "12", title: "Tax Details", screen: "TaxDetailsScreen", icon: "receipt", bg: "#E3F2FD", accent: "#1565C0" },
   { id: "10", title: "Rental Dashboard", screen: "RentalDashboardScreen", icon: "trending-up", bg: "#E1F5FE", accent: "#03A9F4" },
   { id: "11", title: "Customer ID Proofs", screen: "CustomersScreen", icon: "badge", bg: "#EFEBE9", accent: "#795548", params: { filterIdProofs: true } },
 ];
@@ -136,10 +137,18 @@ const HomeScreen = ({ navigation }) => {
         </View>
 
         {/* Section Header */}
-        <ListHeader
-          title="Quick Access"
-          subtitle="Manage your tools & rentals"
-        />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, backgroundColor: COLORS.primaryThemeColor, borderRadius: 10, marginHorizontal: 8, marginTop: 4 }}>
+          <View>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#fff", fontFamily: FONT_FAMILY.urbanistBold }}>Quick Access</Text>
+            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontFamily: FONT_FAMILY.urbanistMedium }}>Manage your tools &amp; rentals</Text>
+          </View>
+          {user?.company_name ? (
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+              <MaterialIcons name="business" size={14} color="#fff" />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff", marginLeft: 4, fontFamily: FONT_FAMILY.urbanistSemiBold }}>{user.company_name}</Text>
+            </View>
+          ) : null}
+        </View>
 
         {/* 2-column Menu Grid */}
         <FlatList

@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+<t t-name="tools_rental_management.RentalTaxReport">
+<div class="o_action o_rental_tax_report" style="background:#f8f9fa; height:100%; overflow-y:scroll;">
+
+    <!-- ═══ HEADER ═══ -->
+    <div style="background:#714B67; color:#fff; padding:16px 24px;
+                position:sticky; top:0; z-index:100;
+                display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="margin:0; font-weight:700;">Tax Details</h3>
+        <span class="text-white-50" style="font-size:13px;">
+            Showing <t t-esc="filteredOrders.length"/> taxed orders
+        </span>
+    </div>
+
+    <div style="padding:20px 24px;">
+
+        <!-- ═══ SUMMARY CARDS ═══ -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #1565C0;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Taxed Orders</div>
+                    <div style="font-size:28px; font-weight:700; color:#1565C0;">
+                        <t t-esc="summaryCards.totalTaxedOrders"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #E65100;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Total Tax Collected</div>
+                    <div style="font-size:28px; font-weight:700; color:#E65100;">
+                        <t t-esc="formatMoney(summaryCards.totalTax)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #17a2b8;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Avg. Tax/Order</div>
+                    <div style="font-size:28px; font-weight:700; color:#17a2b8;">
+                        <t t-esc="formatMoney(summaryCards.avgTax)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #28a745;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Total Revenue (incl. Tax)</div>
+                    <div style="font-size:28px; font-weight:700; color:#28a745;">
+                        <t t-esc="formatMoney(summaryCards.totalRevenue)"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ FILTER BAR ═══ -->
+        <div style="background:#fff; border-radius:10px; padding:14px 18px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.08); margin-bottom:16px;
+                    display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <input type="text" class="form-control form-control-sm"
+                   style="max-width:300px;"
+                   placeholder="Search by Customer ID, Order, Name..."
+                   t-on-input="onSearchInput"/>
+            <select class="form-select form-select-sm" style="max-width:180px;"
+                    t-on-change="onFilterStatus">
+                <option value="all">All Statuses</option>
+                <option value="checked_out">Checked Out</option>
+                <option value="checked_in">Checked In</option>
+                <option value="invoiced">Invoiced</option>
+            </select>
+        </div>
+
+        <!-- ═══ ORDERS TABLE ═══ -->
+        <div style="background:#fff; border-radius:10px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden;">
+            <table class="table table-hover mb-0" style="font-size:13px;">
+                <thead style="background:#f1f1f1;">
+                    <tr>
+                        <th style="padding:12px 14px;">#</th>
+                        <th style="padding:12px 14px;">Customer ID</th>
+                        <th style="padding:12px 14px;">Order</th>
+                        <th style="padding:12px 14px;">Customer</th>
+                        <th style="padding:12px 14px;">Date</th>
+                        <th style="padding:12px 14px;" class="text-end">Subtotal</th>
+                        <th style="padding:12px 14px; background:#E3F2FD;" class="text-end">Tax</th>
+                        <th style="padding:12px 14px;" class="text-end">Total Amount</th>
+                        <th style="padding:12px 14px;">Status</th>
+                        <th style="padding:12px 14px; width:40px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <t t-foreach="filteredOrders" t-as="order" t-key="order.id">
+                        <!-- Main row -->
+                        <tr style="cursor:pointer;"
+                            t-att-class="state.expandedId === order.id ? 'table-active' : ''"
+                            t-on-click="() => this.onToggleDetail(order.id)">
+                            <td style="padding:10px 14px;">
+                                <t t-esc="order_index + 1"/>
+                            </td>
+                            <td style="padding:10px 14px;">
+                                <t t-if="order.customer_code">
+                                    <span class="badge rounded-pill"
+                                          style="background:#714B67; color:#fff; font-size:12px; padding:4px 10px;">
+                                        <t t-esc="order.customer_code"/>
+                                    </span>
+                                </t>
+                            </td>
+                            <td style="padding:10px 14px;">
+                                <a href="#" t-on-click.prevent="() => this.onOpenOrder(order.id)"
+                                   style="text-decoration:none; font-weight:600; color:#1565C0;">
+                                    <t t-esc="order.name"/>
+                                </a>
+                            </td>
+                            <td style="padding:10px 14px;">
+                                <t t-esc="order.partner_id ? order.partner_id[1] : '-'"/>
+                            </td>
+                            <td style="padding:10px 14px;">
+                                <t t-esc="formatDate(order.date_order)"/>
+                            </td>
+                            <td style="padding:10px 14px;" class="text-end">
+                                <t t-esc="formatMoney(order.subtotal)"/>
+                            </td>
+                            <td style="padding:10px 14px; background:#E3F2FD;" class="text-end">
+                                <strong style="color:#E65100;">
+                                    + <t t-esc="formatMoney(order.tax_total)"/>
+                                </strong>
+                            </td>
+                            <td style="padding:10px 14px;" class="text-end">
+                                <t t-esc="formatMoney(order.total_amount)"/>
+                            </td>
+                            <td style="padding:10px 14px;">
+                                <span t-att-class="getStatusClass(order.state)">
+                                    <t t-esc="getStatusLabel(order.state)"/>
+                                </span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <i t-att-class="state.expandedId === order.id ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"
+                                   style="color:#888;"></i>
+                            </td>
+                        </tr>
+
+                        <!-- Expanded detail -->
+                        <t t-if="state.expandedId === order.id">
+                            <tr>
+                                <td colspan="10" style="padding:0; background:#FAFAFA;">
+                                    <div style="padding:16px 24px;">
+                                        <h6 style="font-weight:700; color:#1565C0; margin-bottom:12px;">
+                                            Tax Breakdown — <t t-esc="order.name"/>
+                                        </h6>
+                                        <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
+                                            <thead style="background:#E3F2FD;">
+                                                <tr>
+                                                    <th>Product</th>
+                                                    <th>Serial No.</th>
+                                                    <th class="text-end">Rental Cost</th>
+                                                    <th class="text-end" style="color:#1565C0;">Tax %</th>
+                                                    <th class="text-end" style="color:#E65100;">Tax Amount</th>
+                                                    <th class="text-end">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="state.expandedLines" t-as="line" t-key="line.id">
+                                                    <tr>
+                                                        <td><t t-esc="line.product_id ? line.product_id[1] : '-'"/></td>
+                                                        <td><t t-esc="line.serial_number || '-'"/></td>
+                                                        <td class="text-end"><t t-esc="formatMoney(line.rental_cost)"/></td>
+                                                        <td class="text-end" style="color:#1565C0; font-weight:600;">
+                                                            <t t-esc="(line.tax_percentage || 0).toFixed(1)"/>%
+                                                        </td>
+                                                        <td class="text-end" style="color:#E65100; font-weight:600;">
+                                                            <t t-esc="formatMoney(line.tax_amount)"/>
+                                                        </td>
+                                                        <td class="text-end" style="font-weight:700;">
+                                                            <t t-esc="formatMoney((line.rental_cost || 0) + (line.tax_amount || 0))"/>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                        <div style="text-align:right; margin-top:12px;">
+                                            <a href="#" t-on-click.prevent="() => this.onOpenOrder(order.id)"
+                                               style="text-decoration:none; color:#714B67; font-weight:600; font-size:13px; border:1px solid #ddd; padding:6px 14px; border-radius:6px;">
+                                                <i class="fa fa-external-link me-1"/>Open Full Order
+                                            </a>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </t>
+                    </t>
+
+                    <t t-if="filteredOrders.length === 0">
+                        <tr>
+                            <td colspan="10" class="text-center text-muted" style="padding:40px;">
+                                No taxed orders found.
+                            </td>
+                        </tr>
+                    </t>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+</t>
+</templates>

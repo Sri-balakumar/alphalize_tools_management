@@ -18,6 +18,7 @@ import RentalOrderFormScreen from "@screens/Rentals/RentalOrderFormScreen";
 import CustomersScreen from "@screens/Customers/CustomersScreen";
 import OrderReportsScreen from "@screens/Rentals/OrderReportsScreen";
 import DiscountDetailsScreen from "@screens/ToolManagement/DiscountDetailsScreen";
+import TaxDetailsScreen from "@screens/ToolManagement/TaxDetailsScreen";
 import RentalDashboardScreen from "@screens/ToolManagement/RentalDashboardScreen";
 
 const Stack = createNativeStackNavigator();
@@ -64,6 +65,7 @@ const StackNavigator = () => {
       <Stack.Screen name="OrderReportsScreen" component={OrderReportsScreen} />
       <Stack.Screen name="CustomersScreen" component={CustomersScreen} />
       <Stack.Screen name="DiscountDetailsScreen" component={DiscountDetailsScreen} />
+      <Stack.Screen name="TaxDetailsScreen" component={TaxDetailsScreen} />
       <Stack.Screen name="RentalDashboardScreen" component={RentalDashboardScreen} />
 
       {/* Form screens - slide from bottom (modal feel) */}

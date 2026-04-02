@@ -109,4 +109,10 @@
               parent="menu_rental_reporting"
               action="action_rental_discount_report_dashboard"
               sequence="40"/>
+
+    <menuitem id="menu_rental_tax_report"
+              name="Tax Details"
+              parent="menu_rental_reporting"
+              action="action_rental_tax_report_dashboard"
+              sequence="50"/>
 </odoo>
