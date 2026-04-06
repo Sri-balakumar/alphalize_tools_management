@@ -158,7 +158,7 @@ const ORDER_FIELDS = [
   "amount_due", "subtotal", "late_fee", "tax_total", "damage_charges",
   "discount_amount", "discount_authorized_by", "total_amount",
   "invoice_id", "invoice_state", "notes", "terms",
-  "is_late", "user_id", "customer_code", "partial_return_date",
+  "is_late", "user_id", "customer_code", "partial_return_date", "payment_status", "payment_credit_days",
   "line_ids",
 ];
 
@@ -414,6 +414,10 @@ export const markDone = async (auth, id) => {
   return odooCallMethod(auth, "rental.order", "action_done", [Number(id)]);
 };
 
+export const markOrderPaid = async (auth, id) => {
+  return odooCallMethod(auth, "rental.order", "action_mark_paid", [Number(id)]);
+};
+
 export const createInvoice = async (auth, id) => {
   return odooCallMethod(auth, "rental.order", "action_create_invoice", [Number(id)]);
 };
@@ -527,6 +531,8 @@ const mapOrder = (r, lines = [], timesheet = []) => ({
   amount_due: r.amount_due || 0,
   invoice_id: r.invoice_id ? r.invoice_id[0] : null,
   invoice_state: r.invoice_state || false,
+  payment_status: r.payment_status || "",
+  payment_credit_days: r.payment_credit_days || 0,
   discount_amount: String(r.discount_amount || 0),
   discount_authorized_by: r.discount_authorized_by || "",
   damage_charges: String(r.damage_charges || 0),
@@ -807,6 +813,7 @@ export default {
   confirmOrder,
   cancelOrder,
   markDone,
+  markOrderPaid,
   createInvoice,
   downloadCheckoutInvoice,
   downloadCheckinInvoice,

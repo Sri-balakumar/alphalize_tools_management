@@ -21,6 +21,12 @@
                        decoration-warning="state == 'checked_out'"
                        decoration-success="state in ('done', 'invoiced')"
                        decoration-danger="state == 'cancelled'"/>
+                <field name="payment_status" widget="badge"
+                       decoration-success="payment_status == 'paid'"
+                       decoration-danger="payment_status == 'unpaid'"
+                       optional="show"/>
+                <field name="payment_due_days" string="Due Days"
+                       optional="show"/>
             </list>
         </field>
     </record>
@@ -56,10 +62,17 @@
                             invisible="state not in ('checked_out',) or not partial_return_date"/>
                     <button name="action_done" type="object"
                             string="Mark Done" class="btn-primary"
-                            invisible="state != 'checked_in'"/>
+                            invisible="state != 'checked_in' or payment_status == 'unpaid'"/>
+                    <button name="action_done" type="object"
+                            string="Mark Done" class="btn-warning"
+                            invisible="state != 'checked_in' or payment_status != 'unpaid'"
+                            confirm="⚠ Payment is still UNPAID (Credit). The check-in invoice will show as UNPAID. Are you sure you want to proceed?"/>
                     <button name="action_print_checkin_invoice" type="object"
                             string="Print Check-In Invoice"
                             invisible="state != 'invoiced'"/>
+                    <button name="action_mark_paid" type="object"
+                            string="Mark Paid" class="btn-success"
+                            invisible="payment_status != 'unpaid'"/>
                     <button name="action_cancel" type="object"
                             string="Cancel"
                             invisible="state in ('invoiced', 'cancelled')"
@@ -70,6 +83,17 @@
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,confirmed,checked_out,checked_in,invoiced"/>
                 </header>
+                <div class="alert alert-success text-center fw-bold" role="alert"
+                     invisible="payment_status != 'paid'">
+                    PAID
+                    <span invisible="payment_credit_days == 0">
+                        (<field name="payment_credit_days" readonly="1"/> day(s) credit)
+                    </span>
+                </div>
+                <div class="alert alert-danger text-center fw-bold" role="alert"
+                     invisible="payment_status != 'unpaid'">
+                    UNPAID — <field name="payment_due_days" readonly="1"/> day(s) due
+                </div>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                     </div>

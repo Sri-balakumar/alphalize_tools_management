@@ -111,6 +111,15 @@ class RentalOrder(models.Model):
     checkin_cash_balance = fields.Monetary(
         string='Balance Returned (Check-In)',
         compute='_compute_checkin_cash_balance', store=True)
+    payment_status = fields.Selection([
+        ('paid', 'Paid'),
+        ('unpaid', 'Unpaid'),
+    ], string='Payment Status', copy=False)
+    payment_due_days = fields.Integer(
+        string='Due Days', compute='_compute_payment_due_days')
+    payment_credit_days = fields.Integer(
+        string='Credit Days', copy=False,
+        help='Total days the payment was on credit before being marked paid.')
     late_fee = fields.Monetary(
         string='Late Fees', compute='_compute_totals', store=True)
     tax_total = fields.Monetary(
@@ -255,6 +264,14 @@ class RentalOrder(models.Model):
                 order.checkin_cash_balance = (order.checkin_cash_received or 0.0) - (order.amount_due or 0.0)
             else:
                 order.checkin_cash_balance = 0.0
+
+    def _compute_payment_due_days(self):
+        for order in self:
+            if order.payment_status == 'unpaid' and order.date_checkin:
+                delta = fields.Datetime.now() - order.date_checkin
+                order.payment_due_days = delta.days
+            else:
+                order.payment_due_days = 0
 
     @api.depends('date_checkout', 'date_checkin')
     def _compute_actual_duration(self):
@@ -846,6 +863,13 @@ class RentalOrder(models.Model):
             'user_id': self.env.user.id,
             'notes': f'Advance of {self.advance_amount} returned to customer.',
         })
+
+    def action_mark_paid(self):
+        self.ensure_one()
+        if self.date_checkin:
+            delta = fields.Datetime.now() - self.date_checkin
+            self.payment_credit_days = delta.days
+        self.payment_status = 'paid'
 
     # ── Print Actions ────────────────────────────────────────────────
     def action_print_checkout_invoice(self):

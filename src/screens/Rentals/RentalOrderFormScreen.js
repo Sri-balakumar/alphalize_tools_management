@@ -28,7 +28,7 @@ import * as Print from "expo-print";
 import { Asset } from "expo-asset";
 import SignaturePad from "@components/common/SignaturePad/SignaturePad";
 import CameraCapture from "@components/common/CameraCapture/CameraCapture";
-import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, downloadPartialReturnInvoice, updateCustomer, fetchCustomerImages, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails } from "@api/services/odooService";
+import { updateOrderValues, updateOrderLineValues, fetchOrderDataById, fetchOrderImages, fetchOrderLineImages, downloadCheckoutInvoice, downloadCheckinInvoice, downloadPartialReturnInvoice, updateCustomer, fetchCustomerImages, sendInvoiceWhatsApp, sendWhatsAppDocument, fetchCompanyDetails, markOrderPaid } from "@api/services/odooService";
 import { isEmail, isPhone, getPhoneLength, getEmailSuggestion } from "@utils/validation/validation";
 
 const PERIOD_TYPES = [
@@ -148,6 +148,8 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
   const [odooOrderId, setOdooOrderId] = useState(existingOrder?.odoo_id || null);
 
   const [state, setState] = useState(existingOrder?.state || "draft");
+  const [paymentStatus, setPaymentStatus] = useState(existingOrder?.payment_status || "");
+  const [paymentCreditDays, setPaymentCreditDays] = useState(existingOrder?.payment_credit_days || 0);
   const [form, setForm] = useState({
     name: existingOrder?.name || "New",
     customer_id: existingOrder?.customer_id || "",
@@ -1012,6 +1014,9 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         if (!isPartial) {
           // Full check-in: all tools returned
           await storeCheckinOrder(odooAuth, odooOrderId);
+          // Set payment status based on payment method: credit = unpaid, others = paid
+          const paymentStatus = form.checkin_payment_method === "credit" ? "unpaid" : "paid";
+          await updateOrderValues(odooAuth, odooOrderId, { payment_status: paymentStatus });
         } else {
           // Partial: set partial_return_date on Odoo order
           await updateOrderValues(odooAuth, odooOrderId, {
@@ -1035,6 +1040,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       } else {
         // Full check-in
         setState("checked_in");
+        setPaymentStatus(form.checkin_payment_method === "credit" ? "unpaid" : "paid");
         setForm((prev) => ({
           ...prev,
           date_checkin: new Date().toLocaleString(),
@@ -1052,7 +1058,7 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
     }
   };
 
-  const actionDone = async () => {
+  const doMarkDone = async () => {
     setSaving(true);
     try {
       if (odooOrderId && odooAuth) {
@@ -1066,6 +1072,21 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
       showToastMessage("Error: " + e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const actionDone = () => {
+    if (paymentStatus === "unpaid") {
+      Alert.alert(
+        "Payment Unpaid",
+        "Payment is still UNPAID (Credit). The check-in invoice will show as UNPAID. Are you sure you want to proceed?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "OK", onPress: doMarkDone },
+        ]
+      );
+    } else {
+      doMarkDone();
     }
   };
 
@@ -1340,6 +1361,20 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
         ${isCheckin ? `<tr class="grand-row" style="background-color:#f9f9f9"><td><strong>Amount Due:</strong></td><td class="text-end"><strong>${cur}${amountDue.toFixed(3)}</strong></td></tr>` : ""}
         ${isCheckin && form.checkin_payment_method === 'cash' && checkinCashReceived > 0 ? `<tr style="color:#28a745;font-weight:bold"><td>Cash Received:</td><td class="text-end">${cur}${checkinCashReceived.toFixed(3)}</td></tr><tr style="color:#28a745;font-weight:bold"><td>Balance to Return:</td><td class="text-end">${cur}${checkinCashBalance.toFixed(3)}</td></tr>` : ""}
         ${!isCheckin && form.payment_method === 'cash' && cashReceived > 0 ? `<tr style="color:#28a745;font-weight:bold"><td>Cash Received:</td><td class="text-end">${cur}${cashReceived.toFixed(3)}</td></tr><tr style="color:#28a745;font-weight:bold"><td>Balance to Return:</td><td class="text-end">${cur}${cashBalance.toFixed(3)}</td></tr>` : ""}
+        ${isCheckin && paymentStatus ? (() => {
+          let badge = "";
+          const isCredit = (existingOrder?.checkin_payment_method || form.checkin_payment_method) === "credit";
+          if (paymentStatus === "paid" && isCredit) {
+            badge = `<span style="background:#28a745;color:#fff;padding:4px 12px;border-radius:4px;font-weight:700;font-size:11px;">PAID (${paymentCreditDays} day${paymentCreditDays !== 1 ? "s" : ""} credit)</span>`;
+          } else if (paymentStatus === "paid") {
+            badge = `<span style="background:#28a745;color:#fff;padding:4px 12px;border-radius:4px;font-weight:700;font-size:11px;">PAID</span>`;
+          } else {
+            const checkinDate = existingOrder?.date_checkin || form.date_checkin;
+            const dueDays = checkinDate ? Math.floor((Date.now() - new Date(checkinDate).getTime()) / 86400000) : 0;
+            badge = `<span style="background:#dc3545;color:#fff;padding:4px 12px;border-radius:4px;font-weight:700;font-size:11px;">UNPAID — ${dueDays} day${dueDays !== 1 ? "s" : ""} due</span>`;
+          }
+          return `<tr><td colspan="2" style="padding-top:6px;">${badge}</td></tr>`;
+        })() : ""}
       </table>
     </div>
 
@@ -2283,6 +2318,45 @@ const RentalOrderFormScreen = ({ navigation, route }) => {
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#7B1FA2" }]} onPress={() => openInvoiceModal("checkin")} disabled={saving}>
             <Text style={styles.actionBtnText}>Check-In Invoice</Text>
           </TouchableOpacity>
+        )}
+        {/* Payment Status Badge + Mark Paid Button */}
+        {paymentStatus && ["checked_in", "done", "invoiced"].includes(state) && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
+            <View style={{ backgroundColor: paymentStatus === "paid" ? "#4CAF50" : "#F44336", paddingHorizontal: 14, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+                {paymentStatus === "paid"
+                  ? ((existingOrder?.checkin_payment_method || form.checkin_payment_method) === "credit"
+                    ? `Paid (${paymentCreditDays} day${paymentCreditDays !== 1 ? "s" : ""} credit)` : "Paid")
+                  : "Unpaid"}
+                {paymentStatus === "unpaid" && (existingOrder?.date_checkin || form.date_checkin) ? (() => {
+                  const checkinDate = existingOrder?.date_checkin || form.date_checkin;
+                  const days = Math.floor((Date.now() - new Date(checkinDate).getTime()) / 86400000);
+                  return ` — ${days} day${days !== 1 ? "s" : ""} due`;
+                })() : ""}
+              </Text>
+            </View>
+            {paymentStatus === "unpaid" && (
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: "#4CAF50" }]}
+                onPress={async () => {
+                  try {
+                    const odooAuth = useAuthStore.getState().odooAuth;
+                    await markOrderPaid(odooAuth, odooOrderId);
+                    const checkinDate = existingOrder?.date_checkin || form.date_checkin;
+                    const creditDays = checkinDate ? Math.floor((Date.now() - new Date(checkinDate).getTime()) / 86400000) : 0;
+                    setPaymentStatus("paid");
+                    setPaymentCreditDays(creditDays);
+                    showToastMessage("Marked as Paid");
+                  } catch (e) {
+                    showToastMessage("Failed to mark paid");
+                  }
+                }}
+                disabled={saving}
+              >
+                <Text style={styles.actionBtnText}>Mark Paid</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
     );

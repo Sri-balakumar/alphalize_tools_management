@@ -32,6 +32,8 @@ const FILTER_TABS = [
   { label: "Checked In", value: "checked_in" },
   { label: "Done", value: "done" },
   { label: "Invoiced", value: "invoiced" },
+  { label: "Paid", value: "paid" },
+  { label: "Unpaid", value: "unpaid" },
 ];
 
 const RentalOrdersScreen = ({ navigation }) => {
@@ -50,7 +52,9 @@ const RentalOrdersScreen = ({ navigation }) => {
   const filteredOrders =
     activeFilter === "all"
       ? orders
-      : orders.filter((o) => o.state === activeFilter);
+      : activeFilter === "paid" || activeFilter === "unpaid"
+        ? orders.filter((o) => o.payment_status === activeFilter)
+        : orders.filter((o) => o.state === activeFilter);
 
   const renderFilterTabs = () => (
     <ScrollView
@@ -100,8 +104,23 @@ const RentalOrdersScreen = ({ navigation }) => {
             <Text style={styles.orderRef}>{item.name}</Text>
             <Text style={styles.customerName}>{item.partner_name}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: stateInfo.color }]}>
-            <Text style={styles.badgeText}>{stateInfo.label}</Text>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <View style={[styles.badge, { backgroundColor: stateInfo.color }]}>
+              <Text style={styles.badgeText}>{stateInfo.label}</Text>
+            </View>
+            {item.payment_status && ["checked_in", "done", "invoiced"].includes(item.state) && (
+              <View style={[styles.badge, { backgroundColor: item.payment_status === "paid" ? "#4CAF50" : "#F44336" }]}>
+                <Text style={styles.badgeText}>
+                  {item.payment_status === "paid"
+                    ? (item.checkin_payment_method === "credit" ? `Paid (${item.payment_credit_days}d credit)` : "Paid")
+                    : "Unpaid"}
+                  {item.payment_status === "unpaid" && item.date_checkin ? (() => {
+                    const days = Math.floor((Date.now() - new Date(item.date_checkin).getTime()) / 86400000);
+                    return ` \u00B7 ${days}d due`;
+                  })() : ""}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 

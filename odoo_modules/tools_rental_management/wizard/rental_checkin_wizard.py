@@ -398,6 +398,7 @@ class RentalCheckinWizard(models.TransientModel):
         }
         if self.checkin_payment_method:
             checkin_vals['checkin_payment_method'] = self.checkin_payment_method
+            checkin_vals['payment_status'] = 'unpaid' if self.checkin_payment_method == 'credit' else 'paid'
         if self.checkin_cash_received:
             checkin_vals['checkin_cash_received'] = self.checkin_cash_received
         self.order_id.write(checkin_vals)

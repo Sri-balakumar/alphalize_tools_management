@@ -364,6 +364,27 @@
                                             </td>
                                         </tr>
                                     </t>
+                                    <t t-if="doc.payment_status">
+                                        <tr>
+                                            <td colspan="2" style="padding-top:6px;">
+                                                <t t-if="doc.payment_status == 'paid' and doc.payment_credit_days > 0">
+                                                    <span style="background:#28a745; color:#fff; padding:4px 12px; border-radius:4px; font-weight:700; font-size:11px;">
+                                                        PAID (<t t-out="doc.payment_credit_days"/> day(s) credit)
+                                                    </span>
+                                                </t>
+                                                <t t-elif="doc.payment_status == 'paid'">
+                                                    <span style="background:#28a745; color:#fff; padding:4px 12px; border-radius:4px; font-weight:700; font-size:11px;">
+                                                        PAID
+                                                    </span>
+                                                </t>
+                                                <t t-elif="doc.payment_status == 'unpaid'">
+                                                    <span style="background:#dc3545; color:#fff; padding:4px 12px; border-radius:4px; font-weight:700; font-size:11px;">
+                                                        UNPAID
+                                                    </span>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </t>
                                 </table>
                             </div>
                         </div>
@@ -771,6 +792,27 @@
                                             <td><em>Advance Returned:</em></td>
                                             <td class="text-end">
                                                 <span t-field="doc.advance_amount"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="doc.payment_status">
+                                        <tr>
+                                            <td colspan="2" style="padding-top:6px;">
+                                                <t t-if="doc.payment_status == 'paid' and doc.payment_credit_days > 0">
+                                                    <span style="background:#28a745; color:#fff; padding:4px 12px; border-radius:4px; font-weight:700; font-size:11px;">
+                                                        PAID (<t t-out="doc.payment_credit_days"/> day(s) credit)
+                                                    </span>
+                                                </t>
+                                                <t t-elif="doc.payment_status == 'paid'">
+                                                    <span style="background:#28a745; color:#fff; padding:4px 12px; border-radius:4px; font-weight:700; font-size:11px;">
+                                                        PAID
+                                                    </span>
+                                                </t>
+                                                <t t-elif="doc.payment_status == 'unpaid'">
+                                                    <span style="background:#dc3545; color:#fff; padding:4px 12px; border-radius:4px; font-weight:700; font-size:11px;">
+                                                        UNPAID
+                                                    </span>
+                                                </t>
                                             </td>
                                         </tr>
                                     </t>
