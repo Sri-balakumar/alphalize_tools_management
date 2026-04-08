@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+<t t-name="tools_rental_management.RentalSalesReport">
+<div class="o_action o_rental_sales_report" style="background:#f8f9fa; height:100%; overflow-y:scroll;">
+
+    <!-- ═══ HEADER ═══ -->
+    <div style="background:#714B67; color:#fff; padding:16px 24px;
+                position:sticky; top:0; z-index:100;
+                display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <h3 style="margin:0; font-weight:700;">Sales Report</h3>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span class="text-white-50" style="font-size:13px;">
+                <t t-esc="periodLabel"/> · <t t-esc="filteredOrders.length"/> orders
+            </span>
+            <button class="btn btn-sm btn-light" t-on-click="downloadFullPdf"
+                    style="font-weight:600;">⬇ Full PDF</button>
+            <button class="btn btn-sm btn-light" t-on-click="downloadFullExcel"
+                    style="font-weight:600;">⬇ Full Excel</button>
+        </div>
+    </div>
+
+    <div style="padding:20px 24px;">
+
+        <!-- ═══ PERIOD FILTER BAR ═══ -->
+        <div style="background:#fff; border-radius:10px; padding:14px 18px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.08); margin-bottom:18px;
+                    display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span style="font-weight:600; color:#555; margin-right:6px;">Period:</span>
+            <button t-att-style="pillStyle('today')"  t-on-click="() => this.onPeriodChange('today')">Today</button>
+            <button t-att-style="pillStyle('week')"   t-on-click="() => this.onPeriodChange('week')">This Week</button>
+            <button t-att-style="pillStyle('month')"  t-on-click="() => this.onPeriodChange('month')">This Month</button>
+            <button t-att-style="pillStyle('year')"   t-on-click="() => this.onPeriodChange('year')">This Year</button>
+            <button t-att-style="pillStyle('all')"    t-on-click="() => this.onPeriodChange('all')">All Time</button>
+            <span style="margin-left:18px; color:#888;">|</span>
+            <span style="color:#666; font-size:13px;">Custom:</span>
+            <input type="date" class="form-control form-control-sm"
+                   style="max-width:150px;"
+                   t-att-value="state.customDateFrom"
+                   t-on-change="onCustomDateFrom"/>
+            <span style="color:#666;">to</span>
+            <input type="date" class="form-control form-control-sm"
+                   style="max-width:150px;"
+                   t-att-value="state.customDateTo"
+                   t-on-change="onCustomDateTo"/>
+        </div>
+
+        <!-- ═══ PAYMENT METHOD FILTER ═══ -->
+        <div style="background:#fff; border-radius:10px; padding:14px 18px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.08); margin-bottom:18px;
+                    display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span style="font-weight:600; color:#555; margin-right:6px;">Payment:</span>
+            <button t-att-style="paymentPillStyle('all')"    t-on-click="() => this.onPaymentMethodChange('all')">All</button>
+            <button t-att-style="paymentPillStyle('cash')"   t-on-click="() => this.onPaymentMethodChange('cash')">💵 Cash</button>
+            <button t-att-style="paymentPillStyle('card')"   t-on-click="() => this.onPaymentMethodChange('card')">💳 Card</button>
+            <button t-att-style="paymentPillStyle('bank')"   t-on-click="() => this.onPaymentMethodChange('bank')">🏦 Bank</button>
+            <button t-att-style="paymentPillStyle('credit')" t-on-click="() => this.onPaymentMethodChange('credit')">📋 Credit</button>
+        </div>
+
+        <!-- ═══ KPI CARDS — ROW 1 ═══ -->
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #714B67;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Total Revenue</div>
+                    <div style="font-size:26px; font-weight:700; color:#714B67;">
+                        <t t-esc="formatMoney(summary.totalRevenue)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #007bff;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Total Orders</div>
+                    <div style="font-size:26px; font-weight:700; color:#007bff;">
+                        <t t-esc="formatNumber(summary.orderCount)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #17a2b8;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Avg Order Value</div>
+                    <div style="font-size:26px; font-weight:700; color:#17a2b8;">
+                        <t t-esc="formatMoney(summary.avgOrderValue)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #fd7e14;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Tax Collected</div>
+                    <div style="font-size:26px; font-weight:700; color:#fd7e14;">
+                        <t t-esc="formatMoney(summary.totalTax)"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ KPI CARDS — ROW 2 ═══ -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #dc3545;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Damage Charges</div>
+                    <div style="font-size:26px; font-weight:700; color:#dc3545;">
+                        <t t-esc="formatMoney(summary.totalDamage)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #ffc107;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Late Fees</div>
+                    <div style="font-size:26px; font-weight:700; color:#caa402;">
+                        <t t-esc="formatMoney(summary.totalLate)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #28a745;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Discounts Given</div>
+                    <div style="font-size:26px; font-weight:700; color:#28a745;">
+                        <t t-esc="formatMoney(summary.totalDiscount)"/>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08); border-left:4px solid #4a2f44;">
+                    <div style="color:#888; font-size:12px; text-transform:uppercase;">Net Revenue</div>
+                    <div style="font-size:26px; font-weight:700; color:#4a2f44;">
+                        <t t-esc="formatMoney(summary.netRevenue)"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ TOP CUSTOMERS + TOP TOOLS ═══ -->
+        <div class="row g-3">
+            <!-- All Customers ranked -->
+            <div class="col-md-6">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+                    <h5 style="margin:0 0 12px 0; color:#333; font-weight:700;
+                                display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span>🏆 Customers Ranked</span>
+                        <span style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-sm btn-outline-danger"
+                                    t-on-click="downloadCustomersPdf"
+                                    style="font-size:11px; padding:3px 9px;">⬇ PDF</button>
+                            <button class="btn btn-sm btn-outline-success"
+                                    t-on-click="downloadCustomersExcel"
+                                    style="font-size:11px; padding:3px 9px;">⬇ Excel</button>
+                            <select class="form-select form-select-sm"
+                                    style="max-width:120px;"
+                                    t-on-change="onCustomerLimitChange">
+                                <option value="0" t-att-selected="state.customerLimit === 0">Show All</option>
+                                <option value="2" t-att-selected="state.customerLimit === 2">Top 2</option>
+                                <option value="3" t-att-selected="state.customerLimit === 3">Top 3</option>
+                                <option value="4" t-att-selected="state.customerLimit === 4">Top 4</option>
+                                <option value="5" t-att-selected="state.customerLimit === 5">Top 5</option>
+                                <option value="10" t-att-selected="state.customerLimit === 10">Top 10</option>
+                            </select>
+                            <span style="font-size:12px; color:#888; font-weight:500; white-space:nowrap;">
+                                <t t-esc="displayCustomers.length"/> / <t t-esc="summary.topCustomers.length"/>
+                            </span>
+                        </span>
+                    </h5>
+                    <div style="max-height:420px; overflow-y:auto;">
+                    <table class="table table-sm" style="margin-bottom:0;">
+                        <thead>
+                            <tr style="border-bottom:2px solid #eee;">
+                                <th style="width:40px; color:#888;">#</th>
+                                <th style="color:#888;">Customer</th>
+                                <th style="color:#888; text-align:right;">Orders</th>
+                                <th style="color:#888; text-align:right;">Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="displayCustomers" t-as="c" t-key="c.id">
+                                <tr>
+                                    <td style="font-weight:700; color:#714B67;">
+                                        <t t-esc="c_index + 1"/>
+                                    </td>
+                                    <td style="font-weight:600;">
+                                        <t t-esc="c.name"/>
+                                    </td>
+                                    <td style="text-align:right;">
+                                        <t t-esc="c.count"/>
+                                    </td>
+                                    <td style="text-align:right; font-weight:700; color:#28a745;">
+                                        <t t-esc="formatMoney(c.revenue)"/>
+                                    </td>
+                                </tr>
+                            </t>
+                            <t t-if="!displayCustomers.length">
+                                <tr><td colspan="4" class="text-center text-muted" style="padding:20px;">No data for this period</td></tr>
+                            </t>
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Tools ranked -->
+            <div class="col-md-6">
+                <div style="background:#fff; border-radius:10px; padding:18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+                    <h5 style="margin:0 0 12px 0; color:#333; font-weight:700;
+                                display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span>🔧 Tools Ranked</span>
+                        <span style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-sm btn-outline-danger"
+                                    t-on-click="downloadToolsPdf"
+                                    style="font-size:11px; padding:3px 9px;">⬇ PDF</button>
+                            <button class="btn btn-sm btn-outline-success"
+                                    t-on-click="downloadToolsExcel"
+                                    style="font-size:11px; padding:3px 9px;">⬇ Excel</button>
+                            <select class="form-select form-select-sm"
+                                    style="max-width:120px;"
+                                    t-on-change="onToolLimitChange">
+                                <option value="0" t-att-selected="state.toolLimit === 0">Show All</option>
+                                <option value="2" t-att-selected="state.toolLimit === 2">Top 2</option>
+                                <option value="3" t-att-selected="state.toolLimit === 3">Top 3</option>
+                                <option value="4" t-att-selected="state.toolLimit === 4">Top 4</option>
+                                <option value="5" t-att-selected="state.toolLimit === 5">Top 5</option>
+                                <option value="10" t-att-selected="state.toolLimit === 10">Top 10</option>
+                            </select>
+                            <span style="font-size:12px; color:#888; font-weight:500; white-space:nowrap;">
+                                <t t-esc="displayTools.length"/> / <t t-esc="summary.topTools.length"/>
+                            </span>
+                        </span>
+                    </h5>
+                    <div style="max-height:420px; overflow-y:auto;">
+                    <table class="table table-sm" style="margin-bottom:0;">
+                        <thead>
+                            <tr style="border-bottom:2px solid #eee;">
+                                <th style="width:40px; color:#888;">#</th>
+                                <th style="color:#888;">Tool</th>
+                                <th style="color:#888; text-align:right;">Times Rented</th>
+                                <th style="color:#888; text-align:right;">Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="displayTools" t-as="tool" t-key="tool.name">
+                                <tr>
+                                    <td style="font-weight:700; color:#714B67;">
+                                        <t t-esc="tool_index + 1"/>
+                                    </td>
+                                    <td style="font-weight:600;">
+                                        <t t-esc="tool.name"/>
+                                    </td>
+                                    <td style="text-align:right;">
+                                        <t t-esc="formatNumber(tool.qty)"/>
+                                    </td>
+                                    <td style="text-align:right; font-weight:700; color:#28a745;">
+                                        <t t-esc="formatMoney(tool.revenue)"/>
+                                    </td>
+                                </tr>
+                            </t>
+                            <t t-if="!displayTools.length">
+                                <tr><td colspan="4" class="text-center text-muted" style="padding:20px;">No data for this period</td></tr>
+                            </t>
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+</t>
+</templates>

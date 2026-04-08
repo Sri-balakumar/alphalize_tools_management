@@ -83,6 +83,17 @@ const dropStyles = StyleSheet.create({
 // ── Expanded tax detail ──────────────────────────────────────────
 const TaxDetail = ({ order, navigation }) => {
   const allLines = order.lines || [];
+  // Compute total tax the same way the row + breakdown do: sum of per-line
+  // tax_amount, falling back to order.tax_total if no lines have tax data.
+  const computedTotalTax =
+    allLines.reduce((s, l) => s + (parseFloat(l.tax_amount) || 0), 0) ||
+    parseFloat(order.tax_total || 0);
+  const computedSubtotal =
+    parseFloat(order.subtotal || 0) ||
+    allLines.reduce((s, l) => s + (parseFloat(l.rental_cost || l.price_before_tax) || 0), 0);
+  const computedTotalAmount =
+    parseFloat(order.total_amount || 0) ||
+    (computedSubtotal + computedTotalTax);
 
   return (
     <View style={detailStyles.container}>
@@ -99,9 +110,9 @@ const TaxDetail = ({ order, navigation }) => {
               </View>
             </View>
           ) : null}
-          <DetailRow label="Total Tax" value={`ر.ع.${parseFloat(order.tax_total || 0).toFixed(3)}`} valueColor="#E65100" />
-          <DetailRow label="Subtotal" value={`ر.ع.${parseFloat(order.subtotal || 0).toFixed(3)}`} />
-          <DetailRow label="Total Amount" value={`ر.ع.${parseFloat(order.total_amount || 0).toFixed(3)}`} valueColor="#2E7D32" />
+          <DetailRow label="Total Tax" value={`ر.ع.${computedTotalTax.toFixed(3)}`} valueColor="#E65100" />
+          <DetailRow label="Subtotal" value={`ر.ع.${computedSubtotal.toFixed(3)}`} />
+          <DetailRow label="Total Amount" value={`ر.ع.${computedTotalAmount.toFixed(3)}`} valueColor="#2E7D32" />
         </View>
       </View>
 

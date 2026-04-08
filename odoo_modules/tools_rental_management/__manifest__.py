@@ -55,6 +55,8 @@
         'views/rental_order_report_views.xml',
         'views/rental_discount_report_views.xml',
         'views/rental_tax_report_views.xml',
+        'views/rental_sales_report_views.xml',
+        'views/rental_expense_views.xml',
         'report/rental_agreement_report.xml',
         'report/rental_agreement_template.xml',
         'report/rental_tool_report_pdf.xml',
@@ -96,6 +98,9 @@
             # Tax Details dashboard
             'tools_rental_management/static/src/js/rental_tax_report.js',
             'tools_rental_management/static/src/xml/rental_tax_report.xml',
+            # Sales Report dashboard
+            'tools_rental_management/static/src/js/rental_sales_report.js',
+            'tools_rental_management/static/src/xml/rental_sales_report.xml',
             # Pricing Rules dashboard
             'tools_rental_management/static/src/js/rental_pricing_dashboard.js',
             'tools_rental_management/static/src/xml/rental_pricing_dashboard.xml',

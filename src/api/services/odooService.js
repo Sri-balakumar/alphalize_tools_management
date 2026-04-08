@@ -4,6 +4,7 @@ import {
   odooCreate,
   odooWrite,
   odooRead,
+  odooUnlink,
   odooCallMethod,
   downloadReportPdf,
   sendWhatsAppDocument,
@@ -873,3 +874,101 @@ export default {
   updatePricingRule,
   fetchToolReport,
 };
+
+// =============================================
+// EXPENSES - rental.expense
+// =============================================
+
+const EXPENSE_FIELDS = [
+  "name", "date", "user_id", "category",
+  "quantity", "unit_price", "total_amount",
+  "currency_id", "payment_mode", "payment_method",
+  "rental_order_id", "notes", "receipt_image",
+  "state",
+];
+
+const mapExpense = (r) => ({
+  id: String(r.id),
+  odoo_id: r.id,
+  name: r.name || "",
+  date: r.date || "",
+  user_id: r.user_id ? r.user_id[0] : null,
+  user_name: r.user_id ? r.user_id[1] : "",
+  category: r.category || "other",
+  quantity: parseFloat(r.quantity || 1),
+  unit_price: parseFloat(r.unit_price || 0),
+  total_amount: parseFloat(r.total_amount || 0),
+  currency_id: r.currency_id ? r.currency_id[0] : null,
+  payment_mode: r.payment_mode || "own_account",
+  payment_method: r.payment_method || "cash",
+  rental_order_id: r.rental_order_id ? r.rental_order_id[0] : null,
+  rental_order_name: r.rental_order_id ? r.rental_order_id[1] : "",
+  notes: r.notes || "",
+  receipt_image: r.receipt_image || false,
+  state: r.state || "draft",
+});
+
+export const fetchExpenses = async (auth, domain = []) => {
+  const records = await odooSearchRead(
+    auth, "rental.expense", domain, EXPENSE_FIELDS,
+    { order: "date desc, id desc", limit: 500 }
+  );
+  return records.map(mapExpense);
+};
+
+export const fetchExpenseById = async (auth, expenseId) => {
+  const records = await odooRead(auth, "rental.expense", [Number(expenseId)], EXPENSE_FIELDS);
+  if (records && records.length) return mapExpense(records[0]);
+  return null;
+};
+
+export const createExpense = async (auth, values) => {
+  const odooValues = {
+    name: values.name,
+    date: values.date || false,
+    category: values.category || "other",
+    quantity: parseFloat(values.quantity) || 1,
+    unit_price: parseFloat(values.unit_price) || 0,
+    payment_mode: values.payment_mode || "own_account",
+    payment_method: values.payment_method || "cash",
+    notes: values.notes || false,
+  };
+  if (values.rental_order_id) odooValues.rental_order_id = Number(values.rental_order_id);
+  if (values.receipt_image) odooValues.receipt_image = values.receipt_image;
+  return odooCreate(auth, "rental.expense", odooValues);
+};
+
+export const updateExpense = async (auth, expenseId, values) => {
+  const odooValues = {};
+  if (values.name !== undefined) odooValues.name = values.name;
+  if (values.date !== undefined) odooValues.date = values.date || false;
+  if (values.category !== undefined) odooValues.category = values.category;
+  if (values.quantity !== undefined) odooValues.quantity = parseFloat(values.quantity) || 0;
+  if (values.unit_price !== undefined) odooValues.unit_price = parseFloat(values.unit_price) || 0;
+  if (values.payment_mode !== undefined) odooValues.payment_mode = values.payment_mode;
+  if (values.payment_method !== undefined) odooValues.payment_method = values.payment_method;
+  if (values.notes !== undefined) odooValues.notes = values.notes || false;
+  if (values.rental_order_id !== undefined) {
+    odooValues.rental_order_id = values.rental_order_id ? Number(values.rental_order_id) : false;
+  }
+  if (values.receipt_image !== undefined) {
+    odooValues.receipt_image = values.receipt_image || false;
+  }
+  await odooWrite(auth, "rental.expense", [Number(expenseId)], odooValues);
+};
+
+export const deleteExpense = async (auth, expenseId) => {
+  await odooUnlink(auth, "rental.expense", [Number(expenseId)]);
+};
+
+// State workflow
+export const expenseSubmit = async (auth, id) =>
+  odooCallMethod(auth, "rental.expense", "action_submit", [Number(id)]);
+export const expenseApprove = async (auth, id) =>
+  odooCallMethod(auth, "rental.expense", "action_approve", [Number(id)]);
+export const expenseMarkPaid = async (auth, id) =>
+  odooCallMethod(auth, "rental.expense", "action_mark_paid", [Number(id)]);
+export const expenseRefuse = async (auth, id) =>
+  odooCallMethod(auth, "rental.expense", "action_refuse", [Number(id)]);
+export const expenseResetDraft = async (auth, id) =>
+  odooCallMethod(auth, "rental.expense", "action_reset_to_draft", [Number(id)]);

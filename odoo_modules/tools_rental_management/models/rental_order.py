@@ -1,5 +1,18 @@
+import base64
+import io
+import os
+import subprocess
+import tempfile
+from datetime import datetime
+
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import config
+
+try:
+    import xlsxwriter
+except ImportError:
+    xlsxwriter = None
 
 DAY_MULTIPLIERS = {
     'day': 1,
@@ -754,6 +767,157 @@ class RentalOrder(models.Model):
                     'the order as done. Click the "Customer Rating" button.'
                 ))
             order.state = 'invoiced'
+
+    @api.model
+    def render_sales_report_xlsx(self, title, sections):
+        """Build a real .xlsx file from a list of sections, return base64.
+
+        sections: list of dicts, each shaped:
+            { "name": str, "headers": [str, ...], "rows": [[cell, ...], ...] }
+
+        Used by the Sales Report OWL dashboard for client-side Excel
+        downloads. Produces a genuine .xlsx (no HTML hack) so Excel opens it
+        with zero file-format warnings.
+        """
+        if xlsxwriter is None:
+            raise UserError(_(
+                'The "xlsxwriter" Python library is required for Excel export. '
+                'Please install it (it ships with Odoo by default).'))
+
+        period_label = self.env.context.get('period_label', '')
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+        sheet = workbook.add_worksheet('Sales Report')
+
+        # ── Formats ──
+        title_fmt = workbook.add_format({
+            'bold': True, 'font_size': 16,
+            'font_color': '#714B67', 'font_name': 'Arial',
+        })
+        info_fmt = workbook.add_format({
+            'italic': True, 'font_size': 10,
+            'font_color': '#666666', 'font_name': 'Arial',
+        })
+        section_fmt = workbook.add_format({
+            'bold': True, 'font_size': 13,
+            'font_color': '#333333', 'font_name': 'Arial',
+            'bottom': 2, 'bottom_color': '#714B67',
+        })
+        header_fmt = workbook.add_format({
+            'bold': True, 'font_color': '#FFFFFF',
+            'bg_color': '#714B67', 'border': 1,
+            'align': 'left', 'valign': 'vcenter',
+            'font_name': 'Arial', 'font_size': 11,
+        })
+        cell_fmt = workbook.add_format({
+            'border': 1, 'align': 'left', 'valign': 'vcenter',
+            'font_name': 'Arial', 'font_size': 11,
+        })
+        cell_right_fmt = workbook.add_format({
+            'border': 1, 'align': 'right', 'valign': 'vcenter',
+            'font_name': 'Arial', 'font_size': 11,
+        })
+
+        # ── Title block ──
+        sheet.merge_range(0, 0, 0, 4, title or 'Sales Report', title_fmt)
+        sheet.set_row(0, 24)
+        sheet.write(
+            1, 0,
+            'Period: ' + (period_label or 'All Time')
+            + '   ·   Generated: ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            info_fmt,
+        )
+
+        row = 3
+        max_cols = 0
+        for sec in sections:
+            name = sec.get('name', '') if isinstance(sec, dict) else ''
+            headers = sec.get('headers', []) if isinstance(sec, dict) else []
+            rows = sec.get('rows', []) if isinstance(sec, dict) else []
+            if headers:
+                max_cols = max(max_cols, len(headers))
+
+            sheet.merge_range(row, 0, row, max(0, len(headers) - 1) or 0,
+                              name, section_fmt)
+            row += 1
+            for c, h in enumerate(headers):
+                sheet.write(row, c, h, header_fmt)
+            sheet.set_row(row, 22)
+            row += 1
+            for data_row in rows:
+                for c, val in enumerate(data_row):
+                    fmt = cell_right_fmt if c >= 2 else cell_fmt
+                    sheet.write(row, c, val, fmt)
+                row += 1
+            row += 2  # blank gap between sections
+
+        # ── Column widths ──
+        # 4-col layout: Rank · Customer/Tool · Orders/Times · Revenue
+        # 2-col layout: Metric · Value (handled by widths below)
+        widths = [12, 36, 18, 22, 16]
+        for i, w in enumerate(widths[:max(max_cols, 2)]):
+            sheet.set_column(i, i, w)
+
+        workbook.close()
+        output.seek(0)
+        return base64.b64encode(output.read()).decode('ascii')
+
+    @api.model
+    def render_html_to_pdf(self, html_body):
+        """Convert an HTML string to a PDF and return base64-encoded bytes.
+
+        Used by the Sales Report OWL dashboard for client-side PDF downloads.
+        Bypasses Odoo's `_run_wkhtmltopdf` (which ignores `wkhtmltopdf_path`
+        on Windows and looks for the binary on PATH only). We explicitly
+        resolve the binary from `odoo.conf` first, then fall back to the
+        known install path next to Odoo.
+        """
+        # Resolve the wkhtmltopdf binary
+        candidates = []
+        cfg_path = config.get('wkhtmltopdf_path')
+        if cfg_path:
+            candidates.append(cfg_path)
+        candidates.extend([
+            r'C:\Program Files\Odoo 19.0.20260119\thirdparty\wkhtmltopdf.exe',
+            r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe',
+            'wkhtmltopdf',
+        ])
+        wk_bin = None
+        for c in candidates:
+            if c and (os.path.isfile(c) or c == 'wkhtmltopdf'):
+                wk_bin = c
+                break
+        if not wk_bin:
+            raise UserError(_(
+                'wkhtmltopdf binary not found. Set `wkhtmltopdf_path` in '
+                'odoo.conf or install wkhtmltopdf.'))
+
+        # Write HTML to a temp file, run wkhtmltopdf, read the PDF, clean up
+        html_fd, html_path = tempfile.mkstemp(suffix='.html')
+        os.close(html_fd)
+        pdf_path = html_path[:-5] + '.pdf'
+        try:
+            with open(html_path, 'wb') as f:
+                f.write(html_body.encode('utf-8'))
+            try:
+                subprocess.run(
+                    [wk_bin, '--encoding', 'utf-8', '--quiet',
+                     '--enable-local-file-access',
+                     html_path, pdf_path],
+                    check=True, capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                stderr = (e.stderr or b'').decode('utf-8', errors='replace')
+                raise UserError(_('wkhtmltopdf failed: %s') % stderr)
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+        finally:
+            for p in (html_path, pdf_path):
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+        return base64.b64encode(pdf_bytes).decode('ascii')
 
     def action_open_rating_popup(self):
         """Manually re-open the customer rating popup for this order."""

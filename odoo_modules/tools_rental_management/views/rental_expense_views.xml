@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══ LIST VIEW ═══ -->
+    <record id="view_rental_expense_tree" model="ir.ui.view">
+        <field name="name">rental.expense.tree</field>
+        <field name="model">rental.expense</field>
+        <field name="arch" type="xml">
+            <list string="Expenses"
+                  decoration-muted="state == 'refused'"
+                  decoration-info="state == 'submitted'"
+                  decoration-warning="state == 'approved'"
+                  decoration-success="state == 'done'">
+                <field name="date"/>
+                <field name="name"/>
+                <field name="category"/>
+                <field name="user_id"/>
+                <field name="rental_order_id" optional="show"/>
+                <field name="payment_mode" optional="show"/>
+                <field name="payment_method" optional="hide"/>
+                <field name="quantity" optional="hide"/>
+                <field name="unit_price" optional="hide"/>
+                <field name="total_amount" sum="Total"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="state" widget="badge"
+                       decoration-muted="state == 'draft'"
+                       decoration-info="state == 'submitted'"
+                       decoration-warning="state == 'approved'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'refused'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══ KANBAN VIEW ═══ -->
+    <record id="view_rental_expense_kanban" model="ir.ui.view">
+        <field name="name">rental.expense.kanban</field>
+        <field name="model">rental.expense</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column">
+                <field name="id"/>
+                <field name="name"/>
+                <field name="date"/>
+                <field name="category"/>
+                <field name="total_amount"/>
+                <field name="currency_id"/>
+                <field name="state"/>
+                <field name="user_id"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click oe_kanban_card">
+                            <div class="o_kanban_record_top">
+                                <strong class="o_kanban_record_title">
+                                    <field name="name"/>
+                                </strong>
+                            </div>
+                            <div>
+                                <span class="badge bg-secondary"><field name="category"/></span>
+                                &#160;
+                                <field name="date"/>
+                            </div>
+                            <div style="margin-top:6px;">
+                                <strong>
+                                    <field name="total_amount" widget="monetary"/>
+                                </strong>
+                            </div>
+                            <div class="text-muted" style="font-size:11px;">
+                                <field name="user_id"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ═══ FORM VIEW ═══ -->
+    <record id="view_rental_expense_form" model="ir.ui.view">
+        <field name="name">rental.expense.form</field>
+        <field name="model">rental.expense</field>
+        <field name="arch" type="xml">
+            <form string="Expense">
+                <header>
+                    <button name="action_submit" type="object"
+                            string="Submit" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_approve" type="object"
+                            string="Approve" class="btn-primary"
+                            invisible="state != 'submitted'"
+                            groups="tools_rental_management.group_rental_manager"/>
+                    <button name="action_mark_paid" type="object"
+                            string="Mark as Paid" class="btn-success"
+                            invisible="state != 'approved'"
+                            groups="tools_rental_management.group_rental_manager"/>
+                    <button name="action_refuse" type="object"
+                            string="Refuse" class="btn-danger"
+                            invisible="state in ('draft', 'done', 'refused')"
+                            groups="tools_rental_management.group_rental_manager"/>
+                    <button name="action_reset_to_draft" type="object"
+                            string="Reset to Draft"
+                            invisible="state in ('draft', 'done')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,submitted,approved,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="e.g. Petrol for delivery van"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="category"/>
+                            <field name="user_id"/>
+                            <field name="rental_order_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                        <group>
+                            <field name="quantity"/>
+                            <field name="unit_price"/>
+                            <field name="total_amount"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="payment_mode"/>
+                            <field name="payment_method"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="notes"
+                                   placeholder="Any additional details about this expense..."/>
+                        </page>
+                        <page string="Receipt" name="receipt">
+                            <field name="receipt_filename" invisible="1"/>
+                            <field name="receipt_image" widget="image"
+                                   options="{'size': [400, 400]}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══ SEARCH VIEW ═══ -->
+    <record id="view_rental_expense_search" model="ir.ui.view">
+        <field name="name">rental.expense.search</field>
+        <field name="model">rental.expense</field>
+        <field name="arch" type="xml">
+            <search string="Search Expenses">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="category"/>
+                <field name="rental_order_id"/>
+                <separator/>
+                <filter string="My Expenses" name="my_expenses"
+                        domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <filter string="Draft" name="draft"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter string="Submitted" name="submitted"
+                        domain="[('state', '=', 'submitted')]"/>
+                <filter string="Approved" name="approved"
+                        domain="[('state', '=', 'approved')]"/>
+                <filter string="Paid" name="done"
+                        domain="[('state', '=', 'done')]"/>
+                <filter string="Refused" name="refused"
+                        domain="[('state', '=', 'refused')]"/>
+                <separator/>
+                <filter string="Expense Date" name="date" date="date"/>
+                <group name="group_filters">
+                    <filter string="Status" name="group_state"
+                            domain="[]" context="{'group_by': 'state'}"/>
+                    <filter string="Category" name="group_category"
+                            domain="[]" context="{'group_by': 'category'}"/>
+                    <filter string="Spent By" name="group_user"
+                            domain="[]" context="{'group_by': 'user_id'}"/>
+                    <filter string="Date" name="group_date"
+                            domain="[]" context="{'group_by': 'date'}"/>
+                    <filter string="Payment Mode" name="group_payment_mode"
+                            domain="[]" context="{'group_by': 'payment_mode'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ═══ ACTION ═══ -->
+    <record id="action_rental_expense" model="ir.actions.act_window">
+        <field name="name">Expenses</field>
+        <field name="res_model">rental.expense</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="view_rental_expense_search"/>
+        <field name="context">{'search_default_my_expenses': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Record your first expense
+            </p>
+            <p>Track fuel, repairs, transport and other rental business expenses.</p>
+        </field>
+    </record>
+
+</odoo>

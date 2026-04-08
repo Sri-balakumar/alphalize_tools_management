@@ -20,6 +20,15 @@ import {
   deleteCustomer as apiDeleteCustomer,
   openCheckoutWizard as apiCheckoutOrder,
   openCheckinWizard as apiCheckinOrder,
+  fetchExpenses as apiFetchExpenses,
+  createExpense as apiCreateExpense,
+  updateExpense as apiUpdateExpense,
+  deleteExpense as apiDeleteExpense,
+  expenseSubmit as apiExpenseSubmit,
+  expenseApprove as apiExpenseApprove,
+  expenseMarkPaid as apiExpenseMarkPaid,
+  expenseRefuse as apiExpenseRefuse,
+  expenseResetDraft as apiExpenseResetDraft,
 } from "@api/services/odooService";
 
 // Staleness threshold: skip re-fetch if data was fetched within this window
@@ -40,6 +49,7 @@ const useToolStore = create(
       orders: [],
       pricingRules: [],
       toolReport: [],
+      expenses: [],
       // Loading states
       loading: false,
       error: null,
@@ -230,6 +240,57 @@ const useToolStore = create(
         await apiDeleteCustomer(auth, customerId);
         invalidate("customers");
         await get().fetchCustomers(auth, true);
+      },
+
+      // =============================================
+      // EXPENSE OPERATIONS - rental.expense
+      // =============================================
+      fetchExpenses: async (auth) => {
+        try {
+          const expenses = await apiFetchExpenses(auth);
+          set({ expenses });
+          return expenses;
+        } catch (e) {
+          console.log("fetchExpenses error:", e);
+          return [];
+        }
+      },
+
+      addExpense: async (auth, values) => {
+        const newId = await apiCreateExpense(auth, values);
+        await get().fetchExpenses(auth);
+        return newId;
+      },
+
+      updateExpense: async (auth, expenseId, values) => {
+        await apiUpdateExpense(auth, expenseId, values);
+        await get().fetchExpenses(auth);
+      },
+
+      deleteExpense: async (auth, expenseId) => {
+        await apiDeleteExpense(auth, expenseId);
+        await get().fetchExpenses(auth);
+      },
+
+      expenseSubmit: async (auth, id) => {
+        await apiExpenseSubmit(auth, id);
+        await get().fetchExpenses(auth);
+      },
+      expenseApprove: async (auth, id) => {
+        await apiExpenseApprove(auth, id);
+        await get().fetchExpenses(auth);
+      },
+      expenseMarkPaid: async (auth, id) => {
+        await apiExpenseMarkPaid(auth, id);
+        await get().fetchExpenses(auth);
+      },
+      expenseRefuse: async (auth, id) => {
+        await apiExpenseRefuse(auth, id);
+        await get().fetchExpenses(auth);
+      },
+      expenseResetDraft: async (auth, id) => {
+        await apiExpenseResetDraft(auth, id);
+        await get().fetchExpenses(auth);
       },
 
       // =============================================

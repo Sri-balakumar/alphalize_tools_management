@@ -4,7 +4,7 @@ import {
   Image,
   StyleSheet,
   BackHandler,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   Platform,
 } from "react-native";
@@ -15,34 +15,57 @@ import { COLORS, FONT_FAMILY } from "@constants/theme";
 import { showToastMessage } from "@components/Toast";
 import { useAuthStore } from "@stores/auth";
 import CarouselPagination from "@components/Home/CarouselPagination";
-import ListHeader from "@components/Home/ListHeader";
-import Constants from "expo-constants";
 
-const MENU_ITEMS = [
-  { id: "1", title: "New Rental", screen: "RentalOrderFormScreen", icon: "add-circle", bg: "#E0F7FA", accent: "#00BCD4" },
-  { id: "2", title: "Rental Orders", screen: "RentalOrdersScreen", icon: "assignment", bg: "#E3F2FD", accent: "#2196F3" },
-  { id: "3", title: "Tools & Equipment", screen: "ToolsScreen", icon: "build", bg: "#FFF3E0", accent: "#FF9800" },
-  { id: "4", title: "Pricing Rules", screen: "PricingScreen", icon: "attach-money", bg: "#FFF8E1", accent: "#FFC107" },
-  { id: "5", title: "Tool Categories", screen: "ToolCategoriesScreen", icon: "folder-open", bg: "#E8F5E9", accent: "#4CAF50" },
-  { id: "6", title: "Customers", screen: "CustomersScreen", icon: "people", bg: "#F3E5F5", accent: "#9C27B0" },
-  { id: "7", title: "Tool Availability", screen: "ToolAvailabilityScreen", icon: "bar-chart", bg: "#E8EAF6", accent: "#3F51B5" },
-  { id: "8", title: "Order Reports", screen: "OrderReportsScreen", icon: "description", bg: "#FBE9E7", accent: "#FF5722" },
-  { id: "9", title: "Discount Details", screen: "DiscountDetailsScreen", icon: "local-offer", bg: "#FCE4EC", accent: "#E91E63" },
-  { id: "12", title: "Tax Details", screen: "TaxDetailsScreen", icon: "receipt", bg: "#E3F2FD", accent: "#1565C0" },
-  { id: "10", title: "Rental Dashboard", screen: "RentalDashboardScreen", icon: "trending-up", bg: "#E1F5FE", accent: "#03A9F4" },
-  { id: "11", title: "Customer ID Proofs", screen: "CustomersScreen", icon: "badge", bg: "#EFEBE9", accent: "#795548", params: { filterIdProofs: true } },
-  { id: "13", title: "Customer Ratings", screen: "CustomersScreen", icon: "star", bg: "#FFF8E1", accent: "#F57C00", params: { filterRatings: true } },
+const SECTIONS = [
+  {
+    title: "Operations",
+    icon: "business-center",
+    accent: "#00BCD4",
+    items: [
+      { id: "1", title: "New Rental", screen: "RentalOrderFormScreen", icon: "add-circle", bg: "#E0F7FA", accent: "#00BCD4" },
+      { id: "2", title: "Rental Orders", screen: "RentalOrdersScreen", icon: "assignment", bg: "#E3F2FD", accent: "#2196F3" },
+    ],
+  },
+  {
+    title: "Tools Details & Pricing",
+    icon: "build",
+    accent: "#FF9800",
+    items: [
+      { id: "3", title: "Tools & Equipment", screen: "ToolsScreen", icon: "build", bg: "#FFF3E0", accent: "#FF9800" },
+      { id: "4", title: "Pricing Rules", screen: "PricingScreen", icon: "attach-money", bg: "#FFF8E1", accent: "#FFC107" },
+      { id: "5", title: "Tool Categories", screen: "ToolCategoriesScreen", icon: "folder-open", bg: "#E8F5E9", accent: "#4CAF50" },
+      { id: "7", title: "Tool Availability", screen: "ToolAvailabilityScreen", icon: "bar-chart", bg: "#E8EAF6", accent: "#3F51B5" },
+    ],
+  },
+  {
+    title: "Customers",
+    icon: "people",
+    accent: "#9C27B0",
+    items: [
+      { id: "6", title: "Customers", screen: "CustomersScreen", icon: "people", bg: "#F3E5F5", accent: "#9C27B0" },
+      { id: "11", title: "Customer ID Proofs", screen: "CustomersScreen", icon: "badge", bg: "#EFEBE9", accent: "#795548", params: { filterIdProofs: true } },
+      { id: "13", title: "Customer Ratings", screen: "CustomersScreen", icon: "star", bg: "#FFF8E1", accent: "#F57C00", params: { filterRatings: true } },
+    ],
+  },
+  {
+    title: "Reporting",
+    icon: "insights",
+    accent: "#3F51B5",
+    items: [
+      { id: "14", title: "Sales Report", screen: "SalesReportScreen", icon: "trending-up", bg: "#F3E5F5", accent: "#9C27B0" },
+      { id: "15", title: "Expenses", screen: "ExpensesScreen", icon: "account-balance-wallet", bg: "#F1F8E9", accent: "#7CB342" },
+      { id: "9", title: "Discount Details", screen: "DiscountDetailsScreen", icon: "local-offer", bg: "#FCE4EC", accent: "#E91E63" },
+      { id: "12", title: "Tax Details", screen: "TaxDetailsScreen", icon: "receipt", bg: "#E3F2FD", accent: "#1565C0" },
+      { id: "8", title: "Order Reports", screen: "OrderReportsScreen", icon: "description", bg: "#FBE9E7", accent: "#FF5722" },
+      { id: "10", title: "Rental Dashboard", screen: "RentalDashboardScreen", icon: "trending-up", bg: "#E1F5FE", accent: "#03A9F4" },
+    ],
+  },
 ];
 
-const formatData = (data, numColumns) => {
-  const remainder = data.length % numColumns;
-  if (remainder === 0) return data;
-  const blanks = numColumns - remainder;
-  const result = [...data];
-  for (let i = 0; i < blanks; i++) {
-    result.push({ id: `blank-${i}`, empty: true });
-  }
-  return result;
+// Pad items to even count (for 2-column grid) with invisible placeholders
+const padItems = (items) => {
+  if (items.length % 2 === 0) return items;
+  return [...items, { id: `blank-${items[0]?.id || "x"}`, empty: true }];
 };
 
 const HomeScreen = ({ navigation }) => {
@@ -86,12 +109,13 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [backPressCount]);
 
-  const renderItem = ({ item }) => {
+  const renderCard = (item) => {
     if (item.empty) {
-      return <View style={[styles.card, styles.cardInvisible]} />;
+      return <View key={item.id} style={[styles.card, styles.cardInvisible]} />;
     }
     return (
       <TouchableOpacity
+        key={item.id}
         style={styles.card}
         activeOpacity={0.7}
         onPress={() => navigation.navigate(item.screen, item.params || {})}
@@ -107,6 +131,22 @@ const HomeScreen = ({ navigation }) => {
       </TouchableOpacity>
     );
   };
+
+  const renderSection = (section) => (
+    <View key={section.title} style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIconWrap, { backgroundColor: section.accent + "20" }]}>
+          <MaterialIcons name={section.icon} size={18} color={section.accent} />
+        </View>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+        <View style={styles.sectionLine} />
+        <Text style={styles.sectionCount}>{section.items.length}</Text>
+      </View>
+      <View style={styles.sectionGrid}>
+        {padItems(section.items).map(renderCard)}
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView backgroundColor={COLORS.primaryThemeColor}>
@@ -151,20 +191,17 @@ const HomeScreen = ({ navigation }) => {
           ) : null}
         </View>
 
-        {/* 2-column Menu Grid */}
-        <FlatList
-          key="grid-2"
-          data={formatData(MENU_ITEMS, 2)}
-          numColumns={2}
+        {/* Grouped sections */}
+        <ScrollView
           style={styles.list}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={
-            <Text style={styles.footer}>Powered by 369ai  |  v{require("../../../app.json").expo.version}</Text>
-          }
-        />
+        >
+          {SECTIONS.map(renderSection)}
+          <Text style={styles.footer}>
+            Powered by 369ai  |  v{require("../../../app.json").expo.version}
+          </Text>
+        </ScrollView>
       </RoundedContainer>
     </SafeAreaView>
   );
@@ -236,10 +273,55 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
     paddingTop: 6,
   },
-  card: {
-    flex: 1,
+  section: {
+    marginTop: 14,
+  },
+  sectionHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    margin: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  sectionIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontFamily: FONT_FAMILY.urbanistBold,
+    color: COLORS.primaryThemeColor,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E8ECF0",
+    marginHorizontal: 6,
+  },
+  sectionCount: {
+    fontSize: 11,
+    fontFamily: FONT_FAMILY.urbanistBold,
+    color: "#888",
+    backgroundColor: "#F5F7FA",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  sectionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 0,
+  },
+  card: {
+    width: "47%",
+    alignItems: "center",
+    margin: "1.5%",
     borderRadius: 16,
     backgroundColor: "#fff",
     paddingVertical: 16,

@@ -42,6 +42,7 @@
               action="action_customer_ratings"
               sequence="26"/>
 
+
     <!-- ═══ TOOLS ═══ -->
     <menuitem id="menu_rental_tools"
               name="Tools &amp; Equipment"
@@ -121,4 +122,16 @@
               parent="menu_rental_reporting"
               action="action_rental_tax_report_dashboard"
               sequence="50"/>
+
+    <menuitem id="menu_rental_sales_report"
+              name="Sales Report"
+              parent="menu_rental_reporting"
+              action="action_rental_sales_report_dashboard"
+              sequence="60"/>
+
+    <menuitem id="menu_rental_expense"
+              name="Expenses"
+              parent="menu_rental_reporting"
+              action="action_rental_expense"
+              sequence="70"/>
 </odoo>

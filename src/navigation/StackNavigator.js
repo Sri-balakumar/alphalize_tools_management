@@ -15,6 +15,9 @@ import ToolsScreen from "@screens/Tools/ToolsScreen";
 import ToolFormScreen from "@screens/Tools/ToolFormScreen";
 import RentalOrdersScreen from "@screens/Rentals/RentalOrdersScreen";
 import RentalOrderFormScreen from "@screens/Rentals/RentalOrderFormScreen";
+import SalesReportScreen from "@screens/Rentals/SalesReportScreen";
+import ExpensesScreen from "@screens/Expenses/ExpensesScreen";
+import ExpenseFormScreen from "@screens/Expenses/ExpenseFormScreen";
 import CustomersScreen from "@screens/Customers/CustomersScreen";
 import OrderReportsScreen from "@screens/Rentals/OrderReportsScreen";
 import DiscountDetailsScreen from "@screens/ToolManagement/DiscountDetailsScreen";
@@ -63,6 +66,13 @@ const StackNavigator = () => {
       <Stack.Screen name="ToolsScreen" component={ToolsScreen} />
       <Stack.Screen name="ToolAvailabilityScreen" component={ToolAvailabilityScreen} />
       <Stack.Screen name="OrderReportsScreen" component={OrderReportsScreen} />
+      <Stack.Screen name="SalesReportScreen" component={SalesReportScreen} />
+      <Stack.Screen name="ExpensesScreen" component={ExpensesScreen} />
+      <Stack.Screen
+        name="ExpenseFormScreen"
+        component={ExpenseFormScreen}
+        options={{ animation: "slide_from_bottom" }}
+      />
       <Stack.Screen name="CustomersScreen" component={CustomersScreen} />
       <Stack.Screen name="DiscountDetailsScreen" component={DiscountDetailsScreen} />
       <Stack.Screen name="TaxDetailsScreen" component={TaxDetailsScreen} />
