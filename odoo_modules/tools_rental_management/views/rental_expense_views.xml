@@ -13,7 +13,7 @@
                   decoration-success="state == 'done'">
                 <field name="date"/>
                 <field name="name"/>
-                <field name="category"/>
+                <field name="category_id"/>
                 <field name="user_id"/>
                 <field name="rental_order_id" optional="show"/>
                 <field name="payment_mode" optional="show"/>
@@ -81,8 +81,14 @@
         <field name="arch" type="xml">
             <form string="Expense">
                 <header>
+                    <button name="action_attach_receipt" type="object"
+                            string="Attach Receipt" class="btn-info"
+                            invisible="state != 'draft'"/>
                     <button name="action_submit" type="object"
                             string="Submit" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_split_expense" type="object"
+                            string="Split Expense"
                             invisible="state != 'draft'"/>
                     <button name="action_approve" type="object"
                             string="Approve" class="btn-primary"
@@ -112,7 +118,9 @@
                     <group>
                         <group>
                             <field name="date"/>
-                            <field name="category"/>
+                            <field name="category_id"
+                                   options="{'no_create': False}"/>
+                            <field name="category" invisible="1"/>
                             <field name="user_id"/>
                             <field name="rental_order_id"
                                    options="{'no_create': True}"/>
@@ -121,9 +129,22 @@
                             <field name="quantity"/>
                             <field name="unit_price"/>
                             <field name="total_amount"/>
+                            <label for="included_taxes"/>
+                            <div class="o_row">
+                                <span class="badge rounded-pill bg-info"
+                                      invisible="not tax_percent">
+                                    <field name="tax_percent" nolabel="1"/>%
+                                </span>
+                                <field name="included_taxes" nolabel="1"/>
+                            </div>
                             <field name="currency_id" invisible="1"/>
                             <field name="payment_mode"/>
                             <field name="payment_method"/>
+                            <field name="manager_id"
+                                   options="{'no_create': True}"/>
+                            <field name="account_id"
+                                   options="{'no_create': True}"/>
+                            <field name="account_name" invisible="1"/>
                         </group>
                     </group>
                     <notebook>
@@ -133,8 +154,7 @@
                         </page>
                         <page string="Receipt" name="receipt">
                             <field name="receipt_filename" invisible="1"/>
-                            <field name="receipt_image" widget="image"
-                                   options="{'size': [400, 400]}"/>
+                            <field name="receipt_image" filename="receipt_filename"/>
                         </page>
                     </notebook>
                 </sheet>
@@ -173,7 +193,7 @@
                     <filter string="Status" name="group_state"
                             domain="[]" context="{'group_by': 'state'}"/>
                     <filter string="Category" name="group_category"
-                            domain="[]" context="{'group_by': 'category'}"/>
+                            domain="[]" context="{'group_by': 'category_id'}"/>
                     <filter string="Spent By" name="group_user"
                             domain="[]" context="{'group_by': 'user_id'}"/>
                     <filter string="Date" name="group_date"

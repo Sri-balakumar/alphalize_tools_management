@@ -36,3 +36,7 @@ access_rental_order_media_manager,rental.order.media.manager,model_rental_order_
 access_product_product_rental_manager,product.product.rental.manager,product.model_product_product,group_rental_manager,1,1,1,1
 access_rental_expense_user,rental.expense.user,model_rental_expense,group_rental_user,1,1,1,1
 access_rental_expense_manager,rental.expense.manager,model_rental_expense,group_rental_manager,1,1,1,1
+access_rental_expense_category_user,rental.expense.category.user,model_rental_expense_category,group_rental_user,1,0,0,0
+access_rental_expense_category_manager,rental.expense.category.manager,model_rental_expense_category,group_rental_manager,1,1,1,1
+access_rental_expense_split_wizard_user,rental.expense.split.wizard.user,model_rental_expense_split_wizard,group_rental_user,1,1,1,1
+access_rental_expense_split_wizard_line_user,rental.expense.split.wizard.line.user,model_rental_expense_split_wizard_line,group_rental_user,1,1,1,1

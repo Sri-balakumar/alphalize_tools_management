@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Default expense categories — admin can edit/add from Configuration.
+         noupdate=1 so subsequent module upgrades don't overwrite changes. -->
+
+    <record id="expense_cat_fuel" model="rental.expense.category">
+        <field name="name">Fuel</field>
+        <field name="code">FUEL</field>
+        <field name="cost">5</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Petrol / diesel for delivery vehicles</field>
+    </record>
+
+    <record id="expense_cat_repair" model="rental.expense.category">
+        <field name="name">Repair / Maintenance</field>
+        <field name="code">REPAIR</field>
+        <field name="cost">50</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Tool repairs, vehicle maintenance</field>
+    </record>
+
+    <record id="expense_cat_tools" model="rental.expense.category">
+        <field name="name">Tools / Equipment</field>
+        <field name="code">TOOLS</field>
+        <field name="cost">100</field>
+        <field name="tax_percent">5</field>
+        <field name="guideline">New tool purchases, equipment accessories</field>
+    </record>
+
+    <record id="expense_cat_transport" model="rental.expense.category">
+        <field name="name">Transport</field>
+        <field name="code">TRANS</field>
+        <field name="cost">10</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Taxi, delivery, courier charges</field>
+    </record>
+
+    <record id="expense_cat_office" model="rental.expense.category">
+        <field name="name">Office</field>
+        <field name="code">OFFICE</field>
+        <field name="cost">20</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Office supplies, stationery, printing</field>
+    </record>
+
+    <record id="expense_cat_food" model="rental.expense.category">
+        <field name="name">Food / Travel</field>
+        <field name="code">FOOD</field>
+        <field name="cost">15</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Restaurants, business lunches, lodging</field>
+    </record>
+
+    <record id="expense_cat_rent" model="rental.expense.category">
+        <field name="name">Rent / Utilities</field>
+        <field name="code">RENT</field>
+        <field name="cost">300</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Office rent, electricity, water</field>
+    </record>
+
+    <record id="expense_cat_other" model="rental.expense.category">
+        <field name="name">Other</field>
+        <field name="code">OTHER</field>
+        <field name="cost">0</field>
+        <field name="tax_percent">0</field>
+        <field name="guideline">Catch-all for uncategorized expenses</field>
+    </record>
+
+</odoo>

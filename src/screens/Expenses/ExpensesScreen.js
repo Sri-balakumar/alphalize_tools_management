@@ -161,7 +161,7 @@ const ExpensesScreen = ({ navigation }) => {
         <View style={styles.rowMeta}>
           <Text style={styles.rowMetaText}>{item.date || "—"}</Text>
           <Text style={styles.rowMetaDot}>·</Text>
-          <Text style={styles.rowMetaText}>{CATEGORY_LABELS[item.category] || item.category}</Text>
+          <Text style={styles.rowMetaText}>{item.category_label || CATEGORY_LABELS[item.category] || item.category || "—"}</Text>
           <Text style={styles.rowMetaDot}>·</Text>
           <Text style={styles.rowMetaText} numberOfLines={1}>
             {item.user_name || "—"}

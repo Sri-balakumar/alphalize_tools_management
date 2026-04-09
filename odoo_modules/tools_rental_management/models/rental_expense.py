@@ -30,6 +30,9 @@ class RentalExpense(models.Model):
         'res.currency', string='Currency',
         default=lambda self: self.env.company.currency_id, required=True)
 
+    # Legacy Selection — kept (no longer required) for backward compat
+    # so old expense records still display correctly. New records use
+    # category_id (the Many2one to rental.expense.category below).
     category = fields.Selection([
         ('fuel', 'Fuel'),
         ('repair', 'Repair / Maintenance'),
@@ -39,7 +42,12 @@ class RentalExpense(models.Model):
         ('food', 'Food / Travel'),
         ('rent', 'Rent / Utilities'),
         ('other', 'Other'),
-    ], string='Category', required=True, default='other', tracking=True)
+    ], string='Category (legacy)', default='other', tracking=True)
+    category_id = fields.Many2one(
+        'rental.expense.category',
+        string='Category', required=True, tracking=True,
+        help='Pick a configurable expense category. Edit categories in '
+             'Tools Rental → Configuration → Expense Categories.')
 
     quantity = fields.Float(string='Quantity', default=1.0, required=True)
     unit_price = fields.Monetary(
@@ -68,6 +76,26 @@ class RentalExpense(models.Model):
     receipt_image = fields.Binary(string='Receipt', attachment=True)
     receipt_filename = fields.Char(string='Receipt Filename')
 
+    # ── hr.expense parity fields (added so mobile form can mirror Odoo) ──
+    manager_id = fields.Many2one(
+        'res.users', string='Manager', tracking=True,
+        help='Who is responsible for approving this expense '
+             '(auto-validation if blank).')
+    account_name = fields.Char(
+        string='Account (text)', tracking=True,
+        help='Fallback text field for mobile app if account.account is not available.')
+    account_id = fields.Many2one(
+        'account.account', string='Account', tracking=True,
+        help='Accounting account this expense will post to.')
+    tax_percent = fields.Float(
+        string='Tax %', default=0.0, tracking=True,
+        help='Tax percentage applied to this expense. Copied from the '
+             'category when picked, but can be manually adjusted.')
+    included_taxes = fields.Monetary(
+        string='Included Taxes', currency_field='currency_id',
+        compute='_compute_included_taxes', store=True,
+        help='Computed tax amount = quantity × unit_price × tax_percent / 100.')
+
     state = fields.Selection([
         ('draft', 'Draft'),
         ('submitted', 'Submitted'),
@@ -80,6 +108,42 @@ class RentalExpense(models.Model):
     def _compute_total_amount(self):
         for rec in self:
             rec.total_amount = (rec.quantity or 0.0) * (rec.unit_price or 0.0)
+
+    @api.depends('quantity', 'unit_price', 'tax_percent')
+    def _compute_included_taxes(self):
+        for rec in self:
+            total = (rec.quantity or 0) * (rec.unit_price or 0)
+            rec.included_taxes = round(total * (rec.tax_percent or 0) / 100.0, 3)
+
+    @api.onchange('category_id')
+    def _onchange_category_id(self):
+        """Auto-fill unit_price + tax_percent from the picked category."""
+        for rec in self:
+            cat = rec.category_id
+            if not cat:
+                continue
+            # Suggest the category's default cost only if no price entered yet
+            if not rec.unit_price and cat.cost:
+                rec.unit_price = cat.cost
+            # Always apply the category's tax percentage
+            rec.tax_percent = cat.tax_percent or 0.0
+
+    # ---------- Utility actions ----------
+    def action_attach_receipt(self):
+        """Open the form's Receipt tab. In practice the user scrolls down
+        to the Receipt tab to upload the image — this button is a UX hint
+        matching the standard hr.expense Attach Receipt button layout."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Attach Receipt',
+                'message': 'Scroll down to the "Receipt" tab to upload your receipt image.',
+                'type': 'info',
+                'sticky': False,
+            },
+        }
 
     # ---------- State machine actions ----------
     def action_submit(self):
@@ -113,3 +177,47 @@ class RentalExpense(models.Model):
             if rec.state == 'done':
                 raise UserError(_('Cannot reset a paid expense to draft.'))
             rec.state = 'draft'
+
+    def action_split_expense(self, num_parts=2):
+        """Open the Split Expense wizard as a popup.
+
+        When called from the Odoo web form button (no args), opens the wizard.
+        When called from the mobile app with num_parts > 0, does a quick
+        server-side split without the wizard (mobile has its own split modal).
+        """
+        self.ensure_one()
+        if self.state != 'draft':
+            raise UserError(_('Only draft expenses can be split.'))
+
+        # If called with explicit num_parts from mobile RPC, split directly
+        if self.env.context.get('mobile_split'):
+            n = int(num_parts or 2)
+            if n < 2 or n > 20:
+                raise UserError(_('Number of parts must be between 2 and 20.'))
+            new_unit = (self.unit_price or 0.0) / n
+            for _i in range(n - 1):
+                self.copy({
+                    'unit_price': new_unit,
+                    'name': (self.name or '') + ' (split)',
+                    'state': 'draft',
+                })
+            self.unit_price = new_unit
+            return True
+
+        # Otherwise open the wizard popup (Odoo web button click)
+        view = self.env.ref(
+            'tools_rental_management.view_rental_expense_split_wizard_form',
+            raise_if_not_found=False,
+        )
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': _('Expense split'),
+            'res_model': 'rental.expense.split.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_expense_id': self.id},
+        }
+        if view:
+            action['views'] = [(view.id, 'form')]
+            action['view_id'] = view.id
+        return action

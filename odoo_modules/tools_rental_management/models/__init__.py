@@ -8,4 +8,5 @@ from . import rental_timesheet
 from . import product_product
 from . import rental_tool_report
 from . import res_partner
+from . import rental_expense_category
 from . import rental_expense

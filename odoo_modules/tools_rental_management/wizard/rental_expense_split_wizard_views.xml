@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_rental_expense_split_wizard_form" model="ir.ui.view">
+        <field name="name">rental.expense.split.wizard.form</field>
+        <field name="model">rental.expense.split.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Expense split">
+                <sheet>
+                    <div class="alert alert-warning"
+                         invisible="amounts_match">
+                        The total amount doesn't match the original amount.
+                    </div>
+                    <field name="expense_id" invisible="1"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="amounts_match" invisible="1"/>
+                    <field name="line_ids">
+                        <list editable="bottom">
+                            <field name="name" string="Description"/>
+                            <field name="category_id" string="Product"/>
+                            <field name="user_id" string="Employee"/>
+                            <field name="tax_percent" string="Tax"
+                                   widget="percentage"/>
+                            <field name="tax_amount"
+                                   string="Tax amount in Currency"/>
+                            <field name="total_amount"
+                                   string="Total In Currency" sum="Total"/>
+                            <field name="unit_price" column_invisible="1"/>
+                            <field name="quantity" column_invisible="1"/>
+                            <field name="currency_id" column_invisible="1"/>
+                        </list>
+                    </field>
+                    <group class="oe_subtotal_footer">
+                        <field name="total_amount" string="Total Amount:"
+                               class="oe_subtotal_footer_separator"
+                               widget="monetary"
+                               options="{'currency_field': 'currency_id'}"/>
+                        <field name="original_amount" string="Original Amount:"
+                               widget="monetary"
+                               options="{'currency_field': 'currency_id'}"/>
+                        <field name="total_tax" string="Taxes:"
+                               widget="monetary"
+                               options="{'currency_field': 'currency_id'}"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_split" type="object"
+                            string="Split Expense" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

@@ -129,6 +129,18 @@
               action="action_rental_sales_report_dashboard"
               sequence="60"/>
 
+    <!-- ═══ CONFIGURATION ═══ -->
+    <menuitem id="menu_rental_configuration"
+              name="Configuration"
+              parent="menu_rental_root"
+              sequence="80"/>
+
+    <menuitem id="menu_rental_expense_category"
+              name="Expense Categories"
+              parent="menu_rental_configuration"
+              action="action_rental_expense_category"
+              sequence="10"/>
+
     <menuitem id="menu_rental_expense"
               name="Expenses"
               parent="menu_rental_reporting"

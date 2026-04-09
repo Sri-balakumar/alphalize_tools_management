@@ -880,11 +880,12 @@ export default {
 // =============================================
 
 const EXPENSE_FIELDS = [
-  "name", "date", "user_id", "category",
+  "name", "date", "user_id", "category", "category_id",
   "quantity", "unit_price", "total_amount",
   "currency_id", "payment_mode", "payment_method",
-  "rental_order_id", "notes", "receipt_image",
+  "rental_order_id", "notes", "receipt_image", "receipt_filename",
   "state",
+  "manager_id", "account_name", "tax_percent", "included_taxes",
 ];
 
 const mapExpense = (r) => ({
@@ -894,18 +895,27 @@ const mapExpense = (r) => ({
   date: r.date || "",
   user_id: r.user_id ? r.user_id[0] : null,
   user_name: r.user_id ? r.user_id[1] : "",
-  category: r.category || "other",
+  category: r.category || "",
+  category_id: r.category_id ? r.category_id[0] : null,
+  category_label: r.category_id ? r.category_id[1] : "",
   quantity: parseFloat(r.quantity || 1),
   unit_price: parseFloat(r.unit_price || 0),
   total_amount: parseFloat(r.total_amount || 0),
   currency_id: r.currency_id ? r.currency_id[0] : null,
+  currency_name: r.currency_id ? r.currency_id[1] : "",
   payment_mode: r.payment_mode || "own_account",
   payment_method: r.payment_method || "cash",
   rental_order_id: r.rental_order_id ? r.rental_order_id[0] : null,
   rental_order_name: r.rental_order_id ? r.rental_order_id[1] : "",
   notes: r.notes || "",
   receipt_image: r.receipt_image || false,
+  receipt_filename: r.receipt_filename || "",
   state: r.state || "draft",
+  manager_id: r.manager_id ? r.manager_id[0] : null,
+  manager_name: r.manager_id ? r.manager_id[1] : "",
+  account_name: r.account_name || "",
+  tax_percent: parseFloat(r.tax_percent || 0),
+  included_taxes: parseFloat(r.included_taxes || 0),
 });
 
 export const fetchExpenses = async (auth, domain = []) => {
@@ -926,15 +936,20 @@ export const createExpense = async (auth, values) => {
   const odooValues = {
     name: values.name,
     date: values.date || false,
-    category: values.category || "other",
     quantity: parseFloat(values.quantity) || 1,
     unit_price: parseFloat(values.unit_price) || 0,
     payment_mode: values.payment_mode || "own_account",
     payment_method: values.payment_method || "cash",
     notes: values.notes || false,
+    account_name: values.account_name || false,
+    tax_percent: parseFloat(values.tax_percent) || 0,
+    included_taxes: parseFloat(values.included_taxes) || 0,
   };
+  if (values.category_id) odooValues.category_id = Number(values.category_id);
   if (values.rental_order_id) odooValues.rental_order_id = Number(values.rental_order_id);
   if (values.receipt_image) odooValues.receipt_image = values.receipt_image;
+  if (values.receipt_filename) odooValues.receipt_filename = values.receipt_filename;
+  if (values.manager_id) odooValues.manager_id = Number(values.manager_id);
   return odooCreate(auth, "rental.expense", odooValues);
 };
 
@@ -942,7 +957,9 @@ export const updateExpense = async (auth, expenseId, values) => {
   const odooValues = {};
   if (values.name !== undefined) odooValues.name = values.name;
   if (values.date !== undefined) odooValues.date = values.date || false;
-  if (values.category !== undefined) odooValues.category = values.category;
+  if (values.category_id !== undefined) {
+    odooValues.category_id = values.category_id ? Number(values.category_id) : false;
+  }
   if (values.quantity !== undefined) odooValues.quantity = parseFloat(values.quantity) || 0;
   if (values.unit_price !== undefined) odooValues.unit_price = parseFloat(values.unit_price) || 0;
   if (values.payment_mode !== undefined) odooValues.payment_mode = values.payment_mode;
@@ -953,6 +970,19 @@ export const updateExpense = async (auth, expenseId, values) => {
   }
   if (values.receipt_image !== undefined) {
     odooValues.receipt_image = values.receipt_image || false;
+  }
+  if (values.receipt_filename !== undefined) {
+    odooValues.receipt_filename = values.receipt_filename || false;
+  }
+  if (values.manager_id !== undefined) {
+    odooValues.manager_id = values.manager_id ? Number(values.manager_id) : false;
+  }
+  if (values.account_name !== undefined) odooValues.account_name = values.account_name || false;
+  if (values.tax_percent !== undefined) {
+    odooValues.tax_percent = parseFloat(values.tax_percent) || 0;
+  }
+  if (values.included_taxes !== undefined) {
+    odooValues.included_taxes = parseFloat(values.included_taxes) || 0;
   }
   await odooWrite(auth, "rental.expense", [Number(expenseId)], odooValues);
 };
@@ -972,3 +1002,63 @@ export const expenseRefuse = async (auth, id) =>
   odooCallMethod(auth, "rental.expense", "action_refuse", [Number(id)]);
 export const expenseResetDraft = async (auth, id) =>
   odooCallMethod(auth, "rental.expense", "action_reset_to_draft", [Number(id)]);
+
+// Fetch configurable expense categories from rental.expense.category
+export const fetchExpenseCategories = async (auth) => {
+  const records = await odooSearchRead(
+    auth,
+    "rental.expense.category",
+    [["active", "=", true]],
+    ["id", "name", "code", "cost", "tax_percent", "guideline"],
+    { order: "name", limit: 200 }
+  );
+  return records.map((r) => ({
+    id: r.id,
+    label: r.code ? "[" + r.code + "] " + (r.name || "") : (r.name || ""),
+    name: r.name || "",
+    code: r.code || "",
+    cost: parseFloat(r.cost || 0),
+    tax_percent: parseFloat(r.tax_percent || 0),
+    guideline: r.guideline || "",
+  }));
+};
+
+// Split a draft expense into N parts (mobile — bypasses wizard, splits directly)
+export const expenseSplit = async (auth, id, parts) =>
+  odooCallMethod(auth, "rental.expense", "action_split_expense",
+    [Number(id)], { num_parts: Number(parts) || 2, context: { mobile_split: true } });
+
+// Fetch internal users for the Manager picker (excludes portal/share users)
+export const fetchInternalUsers = async (auth) => {
+  const records = await odooSearchRead(
+    auth,
+    "res.users",
+    [["share", "=", false]],
+    ["id", "name"],
+    { order: "name", limit: 200 }
+  );
+  return records.map((r) => ({ id: r.id, name: r.name || "" }));
+};
+
+// Fetch accounting accounts for the Account picker.
+// Returns [{ id, code, name, label }] where label = "<code> <name>".
+// Re-throws on error so the screen can surface the real reason via toast.
+export const fetchAccounts = async (auth) => {
+  // Use display_name as the canonical label — it's always present on
+  // account.account in every Odoo version and already formats as
+  // "<code> <name>". Avoid filtering by `deprecated` because that
+  // field name changed in some Odoo versions.
+  const records = await odooSearchRead(
+    auth,
+    "account.account",
+    [],
+    ["id", "code", "name", "display_name"],
+    { order: "code", limit: 500 }
+  );
+  return records.map((r) => ({
+    id: r.id,
+    code: r.code || "",
+    name: r.name || "",
+    label: r.display_name || ((r.code || "") + " " + (r.name || "")).trim(),
+  }));
+};

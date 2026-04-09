@@ -29,6 +29,7 @@ import {
   expenseMarkPaid as apiExpenseMarkPaid,
   expenseRefuse as apiExpenseRefuse,
   expenseResetDraft as apiExpenseResetDraft,
+  expenseSplit as apiExpenseSplit,
 } from "@api/services/odooService";
 
 // Staleness threshold: skip re-fetch if data was fetched within this window
@@ -290,6 +291,10 @@ const useToolStore = create(
       },
       expenseResetDraft: async (auth, id) => {
         await apiExpenseResetDraft(auth, id);
+        await get().fetchExpenses(auth);
+      },
+      expenseSplit: async (auth, id, parts) => {
+        await apiExpenseSplit(auth, id, parts);
         await get().fetchExpenses(auth);
       },
 
